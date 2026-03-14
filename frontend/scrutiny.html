@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scrutiny – PARIVESH 3.0</title><link rel="stylesheet" href="/static/css/style.css"></head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout"><div id="sidebar-mount"></div>
+<main class="main">
+  <div class="page-header"><div><div class="page-title">🔍 Scrutiny Dashboard</div><div class="page-subtitle">Review AI-cleared applications and manage EDS</div></div></div>
+  <div class="stats-grid">
+    <div class="stat-card purple"><div class="stat-icon">🤖</div><div class="stat-value" id="s-ai">–</div><div class="stat-label">AI Screening</div></div>
+    <div class="stat-card orange"><div class="stat-icon">🔍</div><div class="stat-value" id="s-sc">–</div><div class="stat-label">In Scrutiny</div></div>
+    <div class="stat-card red"><div class="stat-icon">🔴</div><div class="stat-value" id="s-eds">–</div><div class="stat-label">EDS Raised</div></div>
+    <div class="stat-card teal"><div class="stat-icon">📩</div><div class="stat-value" id="s-resub">–</div><div class="stat-label">Resubmitted</div></div>
+    <div class="stat-card green"><div class="stat-icon">📤</div><div class="stat-value" id="s-ref">–</div><div class="stat-label">Referred</div></div>
+  </div>
+  <div class="filter-pills" style="margin-bottom:14px">
+    <span class="filter-pill active" onclick="loadQ('scrutiny',this)">🔍 In Scrutiny</span>
+    <span class="filter-pill" onclick="loadQ('resubmitted',this)">📩 Resubmitted</span>
+    <span class="filter-pill" onclick="loadQ('eds',this)">🔴 EDS Raised</span>
+    <span class="filter-pill" onclick="loadQ('aiscreening',this)">🤖 AI Screening</span>
+    <span class="filter-pill" onclick="loadQ('referred',this)">📤 Referred</span>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title" id="q-title">🔍 In Scrutiny</span><span id="q-count" class="text-muted text-sm"></span></div>
+    <div class="table-wrapper"><table>
+      <thead><tr><th>App ID</th><th>Project</th><th>Sector</th><th>Cat</th><th>AI Score</th><th>Applicant</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+      <tbody id="q-tbody"><tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr></tbody>
+    </table></div>
+  </div>
+</main></div>
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+let currentUser=null;
+async function init(){
+  currentUser=await requireAuth(['Scrutiny','Admin']);
+  if(!currentUser)return;
+  const {topbarHtml,sidebarHtml,chatbotHtml}=renderShell('scrutiny',currentUser.role);
+  document.getElementById('topbar-mount').innerHTML=topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML=sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML=chatbotHtml;
+  renderTopbar(currentUser);initGlobalSearch();initChatbot();
+  loadStats();loadQ('scrutiny',document.querySelector('.filter-pill'));
+}
+async function loadStats(){
+  const all=await apiFetch('/application/list').catch(()=>[]);
+  document.getElementById('s-ai').textContent=all.filter(a=>a.status==='AIScreening').length;
+  document.getElementById('s-sc').textContent=all.filter(a=>a.status==='Scrutiny').length;
+  document.getElementById('s-eds').textContent=all.filter(a=>a.status==='EDS').length;
+  document.getElementById('s-resub').textContent=all.filter(a=>a.status==='Resubmitted').length;
+  document.getElementById('s-ref').textContent=all.filter(a=>a.status==='Referred').length;
+}
+const QTITLES={scrutiny:'🔍 In Scrutiny',resubmitted:'📩 Resubmitted',eds:'🔴 EDS Raised',aiscreening:'🤖 AI Screening',referred:'📤 Referred'};
+const QMAP={scrutiny:'Scrutiny',resubmitted:'Resubmitted',eds:'EDS',aiscreening:'AIScreening',referred:'Referred'};
+async function loadQ(type,el){
+  document.querySelectorAll('.filter-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  document.getElementById('q-title').textContent=QTITLES[type];
+  const tbody=document.getElementById('q-tbody');
+  tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
+  try{
+    const all=await apiFetch('/application/list');
+    const apps=all.filter(a=>a.status===QMAP[type]);
+    document.getElementById('q-count').textContent=`${apps.length} application(s)`;
+    if(!apps.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Queue is empty</div></div></td></tr>`;return;}
+    tbody.innerHTML=apps.map(a=>`<tr>
+      <td><span class="app-id">${a.id}</span></td>
+      <td><strong>${a.project_name}</strong><br><span class="text-xs text-muted">${a.location}</span></td>
+      <td>${a.sector}</td><td>${a.category}</td>
+      <td>${a.ai_score?`<span style="font-family:var(--font-mono);color:var(--ai-color);font-weight:700">${a.ai_score}%</span>`:'–'}</td>
+      <td>${a.creator_name||'–'}</td>
+      <td>${statusBadge(a.status)}</td>
+      <td>${fmtDateShort(a.created_at)}</td>
+      <td>
+        <a href="/case_file?id=${a.id}" class="btn btn-outline btn-sm">📂 Open</a>
+        ${a.status==='Scrutiny'?`<button class="btn btn-primary btn-sm" onclick="assign('${a.id}')" style="margin-left:4px">Assign</button><button class="btn btn-danger btn-sm" onclick="raisEDS('${a.id}')" style="margin-left:4px">EDS</button>`:''}
+        ${a.status==='Resubmitted'?`<button class="btn btn-accent btn-sm" onclick="refer('${a.id}')" style="margin-left:4px">Refer</button>`:''}
+      </td></tr>`).join('');
+  }catch(e){tbody.innerHTML=`<tr><td colspan="9"><div class="alert alert-error">${e.message}</div></td></tr>`;}
+}
+async function assign(id){
+  try{await apiFetch(`/scrutiny/begin/${id}`,{method:'POST'});showToast('Assigned to you','success');location.href=`/case_file?id=${id}`;}
+  catch(e){showToast(e.message,'error');}
+}
+async function raisEDS(id){
+  const issue=prompt('Describe the EDS issue:');if(!issue)return;
+  const doc=prompt('Requested document (optional):');
+  try{await apiFetch('/scrutiny/raise-eds',{method:'POST',body:JSON.stringify({application_id:id,issue_description:issue,requested_document:doc||''})});showToast('EDS raised','success');loadStats();loadQ('scrutiny',null);}
+  catch(e){showToast(e.message,'error');}
+}
+async function refer(id){
+  const rem=prompt('Referral remarks (optional):');if(rem===null)return;
+  try{await apiFetch(`/scrutiny/refer/${id}`,{method:'POST',body:JSON.stringify({remarks:rem||''})});showToast('Referred to EAC','success');loadStats();loadQ('resubmitted',null);}
+  catch(e){showToast(e.message,'error');}
+}
+init();
+</script></body></html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MoM Dashboard – PARIVESH 3.0</title><link rel="stylesheet" href="/static/css/style.css"></head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout"><div id="sidebar-mount"></div>
+<main class="main">
+  <div class="page-header"><div><div class="page-title">📋 MoM Secretariat Dashboard</div><div class="page-subtitle">Generate Minutes of Meeting and issue final decisions</div></div>
+  <a href="/meetings" class="btn btn-primary">📅 Manage Meetings</a></div>
+  <div class="stats-grid">
+    <div class="stat-card orange"><div class="stat-icon">🏛️</div><div class="stat-value" id="s-ref">–</div><div class="stat-label">Referred</div></div>
+    <div class="stat-card blue"><div class="stat-icon">📋</div><div class="stat-value" id="s-mom">–</div><div class="stat-label">MoM Generated</div></div>
+    <div class="stat-card green"><div class="stat-icon">✅</div><div class="stat-value" id="s-fin">–</div><div class="stat-label">Finalized</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">🏛️ MoM Pipeline</span></div>
+    <div class="table-wrapper"><table>
+      <thead><tr><th>App ID</th><th>Project</th><th>Sector</th><th>Status</th><th>AI Score</th><th>Applicant</th><th>Date</th><th>Actions</th></tr></thead>
+      <tbody id="mom-tbody"><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr></tbody>
+    </table></div>
+  </div>
+</main></div>
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+let currentUser=null;
+async function init(){
+  currentUser=await requireAuth(['MoM','Admin']);
+  if(!currentUser)return;
+  const {topbarHtml,sidebarHtml,chatbotHtml}=renderShell('mom',currentUser.role);
+  document.getElementById('topbar-mount').innerHTML=topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML=sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML=chatbotHtml;
+  renderTopbar(currentUser);initGlobalSearch();initChatbot();load();
+}
+async function load(){
+  try{
+    const all=await apiFetch('/application/list');
+    document.getElementById('s-ref').textContent=all.filter(a=>a.status==='Referred').length;
+    document.getElementById('s-mom').textContent=all.filter(a=>a.status==='MoMGenerated').length;
+    document.getElementById('s-fin').textContent=all.filter(a=>a.status==='Finalized').length;
+    const apps=all.filter(a=>['Referred','MoMGenerated','Finalized'].includes(a.status));
+    const tbody=document.getElementById('mom-tbody');
+    if(!apps.length){tbody.innerHTML='<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">No applications in MoM pipeline</div></div></td></tr>';return;}
+    tbody.innerHTML=apps.map(a=>`<tr>
+      <td><span class="app-id">${a.id}</span></td>
+      <td><strong>${a.project_name}</strong></td>
+      <td>${a.sector}</td>
+      <td>${statusBadge(a.status)}</td>
+      <td>${a.ai_score?`<span style="font-family:var(--font-mono);color:var(--ai-color);font-weight:700">${a.ai_score}%</span>`:'–'}</td>
+      <td>${a.creator_name||'–'}</td>
+      <td>${fmtDateShort(a.created_at)}</td>
+      <td><a href="/case_file?id=${a.id}" class="btn btn-outline btn-sm">📂 Open</a></td>
+    </tr>`).join('');
+  }catch(e){showToast(e.message,'error');}
+}
+init();
+</script></body></html>

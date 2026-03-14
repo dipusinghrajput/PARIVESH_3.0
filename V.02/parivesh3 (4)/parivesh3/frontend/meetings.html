@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meetings – PARIVESH 3.0</title><link rel="stylesheet" href="/static/css/style.css">
+<style>
+.meeting-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow-sm);transition:var(--transition);}
+.meeting-card:hover{box-shadow:var(--shadow);}
+.meeting-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap;}
+.meeting-status{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;}
+.meeting-status.Scheduled{background:#E3F2FD;color:#1565C0;}
+.meeting-status.Completed{background:#E8F5E9;color:#2E7D32;}
+.meeting-status.Cancelled{background:#FFEBEE;color:#C62828;}
+</style>
+</head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout"><div id="sidebar-mount"></div>
+<main class="main">
+  <div class="page-header">
+    <div><div class="page-title">📅 Meeting Management</div><div class="page-subtitle">Schedule EAC meetings, manage agendas, generate AI gist documents</div></div>
+    <button class="btn btn-primary" onclick="openModal('create-modal')">+ Schedule Meeting</button>
+  </div>
+  <div id="meetings-list"><div style="text-align:center;padding:32px;color:var(--text-muted)">Loading…</div></div>
+</main></div>
+
+<div class="modal-overlay" id="create-modal"><div class="modal">
+  <div class="modal-header"><span class="modal-title">📅 Schedule New Meeting</span><button class="modal-close" onclick="closeModal('create-modal')">×</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label class="form-label">Meeting Title *</label><input type="text" id="m-title" class="form-control" placeholder="e.g. EAC Meeting #143"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Application ID *</label><input type="text" id="m-appid" class="form-control" placeholder="EC-XXXXXXXX"></div>
+      <div class="form-group"><label class="form-label">Scheduled Date *</label><input type="date" id="m-date" class="form-control"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Agenda</label><textarea id="m-agenda" class="form-control" rows="4" placeholder="Meeting agenda items…"></textarea></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('create-modal')">Cancel</button><button class="btn btn-primary" onclick="createMeeting()">Create &amp; Generate Gist</button></div>
+</div></div>
+
+<div class="modal-overlay" id="notes-modal"><div class="modal" style="max-width:640px">
+  <div class="modal-header"><span class="modal-title" id="notes-modal-title">Meeting Notes</span><button class="modal-close" onclick="closeModal('notes-modal')">×</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label class="form-label">Meeting Notes</label><textarea id="m-notes" class="form-control" rows="6" placeholder="Enter meeting discussion notes…"></textarea></div>
+    <div class="form-group"><label class="form-label">Status</label>
+      <select id="m-status" class="form-control"><option>Scheduled</option><option>Completed</option><option>Cancelled</option></select></div>
+    <div style="margin-top:12px"><label class="form-label">AI Gist Document</label>
+      <pre id="m-gist" style="background:var(--surface2);padding:12px;border-radius:8px;font-size:11px;font-family:var(--font-mono);white-space:pre-wrap;max-height:200px;overflow-y:auto">Loading…</pre>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('notes-modal')">Cancel</button><button class="btn btn-primary" onclick="saveNotes()">Save Notes</button></div>
+</div></div>
+
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+let currentUser=null, editingMid=null;
+async function init(){
+  currentUser=await requireAuth(['MoM','Admin']);
+  if(!currentUser)return;
+  const {topbarHtml,sidebarHtml,chatbotHtml}=renderShell('meetings',currentUser.role);
+  document.getElementById('topbar-mount').innerHTML=topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML=sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML=chatbotHtml;
+  renderTopbar(currentUser);initGlobalSearch();initChatbot();
+  loadMeetings();
+}
+async function loadMeetings(){
+  const el=document.getElementById('meetings-list');
+  try{
+    const meetings=await apiFetch('/meetings');
+    if(!meetings.length){el.innerHTML='<div class="empty-state"><div class="empty-state-icon">📅</div><div class="empty-state-text">No meetings scheduled</div></div>';return;}
+    el.innerHTML=meetings.map(m=>`
+      <div class="meeting-card">
+        <div class="meeting-card-header">
+          <div>
+            <div style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--primary)">${m.title}</div>
+            ${m.project_name?`<div class="text-muted text-sm" style="margin-top:3px">📁 ${m.project_name} <span class="app-id" style="font-size:11px">${m.application_id||''}</span></div>`:''}
+          </div>
+          <span class="meeting-status ${m.status||'Scheduled'}">${m.status||'Scheduled'}</span>
+        </div>
+        <div class="flex gap-12" style="flex-wrap:wrap;font-size:12.5px;color:var(--text-muted);margin-bottom:10px">
+          <span>📅 ${m.scheduled_date||'TBD'}</span>
+          ${m.sector?`<span>🏭 ${m.sector}</span>`:''}
+          ${m.application_id?`<span>🆔 ${m.application_id}</span>`:''}
+        </div>
+        ${m.agenda?`<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;white-space:pre-wrap">${m.agenda}</div>`:''}
+        ${m.notes?`<div style="font-size:12px;background:var(--surface2);padding:8px 10px;border-radius:6px;margin-bottom:10px">📝 ${m.notes}</div>`:''}
+        <div class="flex gap-8">
+          ${m.application_id?`<a href="/case_file?id=${m.application_id}" class="btn btn-outline btn-sm">📂 Case File</a>`:''}
+          <button class="btn btn-primary btn-sm" onclick="editMeeting(${m.id},'${m.title}')">✏️ Notes &amp; Gist</button>
+        </div>
+      </div>`).join('');
+  }catch(e){el.innerHTML=`<div class="alert alert-error">${e.message}</div>`;}
+}
+async function createMeeting(){
+  const title=document.getElementById('m-title').value.trim();
+  const appId=document.getElementById('m-appid').value.trim();
+  const date=document.getElementById('m-date').value;
+  const agenda=document.getElementById('m-agenda').value.trim();
+  if(!title||!appId||!date){showToast('Fill all required fields','warning');return;}
+  try{
+    await apiFetch('/meetings/create',{method:'POST',body:JSON.stringify({title,application_id:appId,scheduled_date:date,agenda})});
+    closeModal('create-modal');showToast('Meeting created with AI gist!','success');loadMeetings();
+  }catch(e){showToast(e.message,'error');}
+}
+async function editMeeting(id, title){
+  editingMid=id;
+  document.getElementById('notes-modal-title').textContent=`✏️ ${title}`;
+  document.getElementById('m-gist').textContent='Loading gist…';
+  openModal('notes-modal');
+  try{
+    const m=await apiFetch(`/meetings/${id}`);
+    document.getElementById('m-notes').value=m.notes||'';
+    document.getElementById('m-status').value=m.status||'Scheduled';
+    document.getElementById('m-gist').textContent=m.gist_text||'No gist generated.';
+  }catch(e){showToast(e.message,'error');}
+}
+async function saveNotes(){
+  try{
+    await apiFetch(`/meetings/${editingMid}/update`,{method:'POST',body:JSON.stringify({notes:document.getElementById('m-notes').value,status:document.getElementById('m-status').value})});
+    closeModal('notes-modal');showToast('Notes saved!','success');loadMeetings();
+  }catch(e){showToast(e.message,'error');}
+}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+init();
+</script></body></html>

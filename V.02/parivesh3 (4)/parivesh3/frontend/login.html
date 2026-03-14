@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login – PARIVESH 3.0</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+body{background:var(--primary-dark);display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;padding:16px;}
+.login-wrap{width:100%;max-width:430px;}
+.login-brand{text-align:center;margin-bottom:28px;color:white;}
+.login-emblem{width:68px;height:68px;background:linear-gradient(135deg,#FF8F00,#E65100);border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:26px;font-weight:700;color:white;margin:0 auto 14px;box-shadow:0 8px 24px rgba(230,81,0,.4);}
+.login-brand h1{font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing:1px;}
+.login-brand p{font-size:11px;opacity:.6;letter-spacing:.4px;margin-top:3px;}
+.login-card{background:var(--surface);border-radius:var(--radius-lg);padding:28px;box-shadow:0 24px 64px rgba(0,0,0,.28);}
+.gov-stripe{height:4px;background:linear-gradient(90deg,#FF9933 33%,#fff 33%,#fff 66%,#138808 66%);border-radius:4px 4px 0 0;margin:-28px -28px 24px;}
+.tab-row{display:flex;gap:0;margin-bottom:22px;border-bottom:2px solid var(--border);}
+.tab-btn{flex:1;padding:9px;background:none;border:none;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:var(--transition);font-family:var(--font-body);}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);}
+.login-footer{text-align:center;margin-top:18px;font-size:11px;color:rgba(255,255,255,.45);}
+.demo-creds{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:10px 14px;margin-top:14px;font-size:11px;color:rgba(255,255,255,.6);line-height:1.8;}
+.demo-creds strong{color:rgba(255,255,255,.85);}
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-brand">
+    <div class="login-emblem">P3</div>
+    <h1>PARIVESH 3.0</h1>
+    <p>ENVIRONMENTAL CLEARANCE MANAGEMENT SYSTEM</p>
+  </div>
+  <div class="login-card">
+    <div class="gov-stripe"></div>
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+      <button class="tab-btn" onclick="switchTab('register')">Register</button>
+    </div>
+    <div id="login-form">
+      <div id="login-alert"></div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="login-email" class="form-control" placeholder="user@example.gov.in">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="login-password" class="form-control" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary w-full btn-lg" onclick="doLogin()" style="margin-top:6px">Sign In →</button>
+    </div>
+    <div id="register-form" class="hidden">
+      <div id="reg-alert"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Full Name</label><input type="text" id="reg-name" class="form-control" placeholder="Your name"></div>
+        <div class="form-group"><label class="form-label">Role</label>
+          <select id="reg-role" class="form-control">
+            <option value="PP">Project Proponent</option>
+            <option value="Scrutiny">Scrutiny Officer</option>
+            <option value="MoM">MoM Secretariat</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Email</label><input type="email" id="reg-email" class="form-control" placeholder="your@email.com"></div>
+      <div class="form-group"><label class="form-label">Department</label><input type="text" id="reg-dept" class="form-control" placeholder="e.g. Scrutiny Division"></div>
+      <div class="form-group"><label class="form-label">Phone / Mobile</label><input type="text" id="reg-phone" class="form-control" placeholder="+91-XXXXX-XXXXX (optional)"></div>
+      <div class="form-group"><label class="form-label">Password (min 6 chars)</label><input type="password" id="reg-password" class="form-control"></div>
+      <button class="btn btn-accent w-full btn-lg" onclick="doRegister()">Create Account →</button>
+    </div>
+  </div>
+  <div class="demo-creds">
+    <strong>Demo Accounts:</strong><br>
+    Admin: admin@parivesh.gov.in / admin123<br>
+    PP: rahul@infra.com / test123 &nbsp;|&nbsp; sunita@mining.com / test123<br>
+    Scrutiny: priya@scrutiny.gov.in / test123<br>
+    MoM: anil@mom.gov.in / test123
+  </div>
+  <div class="login-footer">© 2024 Ministry of Environment, Forest &amp; Climate Change — Govt. of India</div>
+</div>
+<script src="/static/js/app.js"></script>
+<script>
+apiFetch('/me').then(()=>location.href='/dashboard').catch(()=>{});
+function switchTab(t){
+  document.getElementById('login-form').classList.toggle('hidden',t!=='login');
+  document.getElementById('register-form').classList.toggle('hidden',t!=='register');
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',(i===0)===(t==='login')));
+}
+async function doLogin(){
+  const alertEl=document.getElementById('login-alert'); alertEl.innerHTML='';
+  try{
+    await apiFetch('/login',{method:'POST',body:JSON.stringify({email:document.getElementById('login-email').value.trim(),password:document.getElementById('login-password').value})});
+    location.href='/dashboard';
+  }catch(e){alertEl.innerHTML=`<div class="alert alert-error">⚠️ ${e.message}</div>`;}
+}
+async function doRegister(){
+  const alertEl=document.getElementById('reg-alert'); alertEl.innerHTML='';
+  try{
+    await apiFetch('/register',{method:'POST',body:JSON.stringify({name:document.getElementById('reg-name').value.trim(),email:document.getElementById('reg-email').value.trim(),password:document.getElementById('reg-password').value,role:document.getElementById('reg-role').value,department:document.getElementById('reg-dept').value.trim(),phone:document.getElementById('reg-phone').value.trim()})});
+    alertEl.innerHTML='<div class="alert alert-success">✅ Registered! Please sign in.</div>';
+    setTimeout(()=>switchTab('login'),1500);
+  }catch(e){alertEl.innerHTML=`<div class="alert alert-error">⚠️ ${e.message}</div>`;}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+</script>
+</body></html>

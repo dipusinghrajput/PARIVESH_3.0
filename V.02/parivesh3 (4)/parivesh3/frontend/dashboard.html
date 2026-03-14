@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard – PARIVESH 3.0</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout">
+  <div id="sidebar-mount"></div>
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title" id="dash-greeting">Dashboard</div>
+        <div class="page-subtitle">Environmental Clearance Management Portal</div>
+      </div>
+      <div id="dash-actions"></div>
+    </div>
+    <div id="page-alert"></div>
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card blue"><div class="stat-icon">📁</div><div class="stat-value" id="s-total">–</div><div class="stat-label">Total Applications</div></div>
+      <div class="stat-card purple"><div class="stat-icon">🤖</div><div class="stat-value" id="s-ai">–</div><div class="stat-label">AI Screening</div></div>
+      <div class="stat-card orange"><div class="stat-icon">🔍</div><div class="stat-value" id="s-scrutiny">–</div><div class="stat-label">Under Scrutiny</div></div>
+      <div class="stat-card red"><div class="stat-icon">🔴</div><div class="stat-value" id="s-eds">–</div><div class="stat-label">EDS Pending</div></div>
+      <div class="stat-card teal"><div class="stat-icon">🏛️</div><div class="stat-value" id="s-referred">–</div><div class="stat-label">Referred to EAC</div></div>
+      <div class="stat-card green"><div class="stat-icon">✅</div><div class="stat-value" id="s-final">–</div><div class="stat-label">Finalized</div></div>
+    </div>
+    <div class="card mb-12" style="margin-bottom:14px">
+      <div class="card-body" style="padding:12px 16px">
+        <div class="flex gap-8" style="flex-wrap:wrap">
+          <input id="search-input" class="form-control" style="max-width:240px" placeholder="🔍 Search by ID, name, sector…" oninput="debounceLoad()">
+          <select id="filter-status" class="form-control" style="max-width:180px" onchange="loadApps()">
+            <option value="">All Statuses</option>
+            <option>Draft</option><option>Submitted</option><option>AIScreening</option>
+            <option>Scrutiny</option><option>EDS</option><option>Resubmitted</option>
+            <option>Referred</option><option>MoMGenerated</option><option>Finalized</option>
+          </select>
+          <select id="filter-sector" class="form-control" style="max-width:180px" onchange="loadApps()">
+            <option value="">All Sectors</option>
+            <option>Sand Mining</option><option>Limestone Mining</option><option>Brick Kiln</option>
+            <option>Infrastructure</option><option>Industry</option><option>Energy</option>
+            <option>Coastal</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 Applications</span>
+        <span id="app-count" class="text-muted text-sm"></span>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>App ID</th><th>Project Name</th><th>Sector</th><th>Category</th><th>Status</th><th>AI Score</th><th>Applicant</th><th>Handler</th><th>Date</th><th>Action</th></tr></thead>
+          <tbody id="app-tbody"><tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-muted)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+let currentUser=null, debTimer=null;
+const urlParams=new URLSearchParams(location.search);
+
+async function init(){
+  currentUser=await requireAuth();
+  if(!currentUser)return;
+  const {topbarHtml,sidebarHtml,chatbotHtml}=renderShell('dashboard',currentUser.role);
+  document.getElementById('topbar-mount').innerHTML=topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML=sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML=chatbotHtml;
+  renderTopbar(currentUser); initGlobalSearch(); initChatbot();
+  document.getElementById('dash-greeting').textContent=`Welcome, ${currentUser.name}`;
+  if(currentUser.role==='PP')
+    document.getElementById('dash-actions').innerHTML='<a href="/application_form" class="btn btn-primary">➕ New Application</a>';
+  if(urlParams.get('search')) document.getElementById('search-input').value=urlParams.get('search');
+  await loadApps();
+}
+
+function debounceLoad(){clearTimeout(debTimer);debTimer=setTimeout(loadApps,300);}
+
+async function loadApps(){
+  const status=document.getElementById('filter-status').value;
+  const sector=document.getElementById('filter-sector').value;
+  const search=document.getElementById('search-input').value.trim();
+  let url='/application/list?';
+  if(status) url+=`status=${encodeURIComponent(status)}&`;
+  if(sector) url+=`sector=${encodeURIComponent(sector)}&`;
+  if(search) url+=`search=${encodeURIComponent(search)}&`;
+  const tbody=document.getElementById('app-tbody');
+  tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>';
+  try{
+    const apps=await apiFetch(url);
+    document.getElementById('app-count').textContent=`${apps.length} record(s)`;
+    document.getElementById('s-total').textContent=apps.length;
+    document.getElementById('s-ai').textContent=apps.filter(a=>a.status==='AIScreening').length;
+    document.getElementById('s-scrutiny').textContent=apps.filter(a=>['Scrutiny','Resubmitted'].includes(a.status)).length;
+    document.getElementById('s-eds').textContent=apps.filter(a=>a.status==='EDS').length;
+    document.getElementById('s-referred').textContent=apps.filter(a=>a.status==='Referred').length;
+    document.getElementById('s-final').textContent=apps.filter(a=>a.status==='Finalized').length;
+    if(!apps.length){
+      tbody.innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="empty-state-icon">📂</div><div class="empty-state-text">No applications found</div></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML=apps.map(a=>`
+      <tr>
+        <td><span class="app-id">${a.id}</span></td>
+        <td><strong>${a.project_name}</strong><br><span class="text-xs text-muted">${a.location}</span></td>
+        <td>${a.sector}</td><td>${a.category}</td>
+        <td>${statusBadge(a.status)}</td>
+        <td>${a.ai_score?`<span style="font-family:var(--font-mono);font-size:12px;color:var(--ai-color);font-weight:700">${a.ai_score}%</span>`:'<span class="text-muted text-xs">–</span>'}</td>
+        <td>${a.creator_name||'–'}</td>
+        <td>${a.officer_name?`<strong>${a.officer_name}</strong>`:'<span class="text-muted">–</span>'}</td>
+        <td>${fmtDateShort(a.created_at)}</td>
+        <td>
+          <a href="/case_file?id=${a.id}" class="btn btn-outline btn-sm">📂 Open</a>
+          ${a.status==='Draft'&&currentUser.role==='PP'&&a.created_by===currentUser.id?`<button class="btn btn-accent btn-sm" onclick="quickSubmit('${a.id}')" style="margin-left:4px">Submit</button>`:''}
+        </td>
+      </tr>`).join('');
+  }catch(e){tbody.innerHTML=`<tr><td colspan="10"><div class="alert alert-error">${e.message}</div></td></tr>`;}
+}
+
+async function quickSubmit(id){
+  if(!confirm('Submit this application? AI pre-screening will run automatically.'))return;
+  try{
+    const res=await apiFetch(`/application/${id}/submit`,{method:'POST'});
+    const score=res.ai_report?.score||0;
+    const passed=res.ai_report?.passed;
+    showToast(passed?`✅ AI PASSED (${score}%) — Application in Scrutiny queue`:`❌ AI FAILED (${score}%) — EDS raised`,passed?'success':'error');
+    loadApps();
+  }catch(e){showToast(e.message,'error');}
+}
+
+init();
+</script>
+</body></html>

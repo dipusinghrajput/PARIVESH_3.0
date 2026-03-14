@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Case File – PARIVESH 3.0</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+.two-col{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start;}
+.action-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;}
+.action-panel-header{padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-weight:700;font-size:13.5px;color:var(--primary);}
+.action-panel-body{padding:16px;}
+.doc-history-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:12.5px;}
+.doc-history-item:last-child{border-bottom:none;}
+.version-chip{background:var(--primary);color:white;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;font-family:var(--font-mono);flex-shrink:0;}
+.version-chip.old{background:var(--text-muted);}
+.affidavit-chip{background:var(--ai-bg);color:var(--ai-color);border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;flex-shrink:0;}
+
+/* Officer panel redesign */
+.officer-section{text-align:center;padding:4px 0 8px;}
+.officer-divider{height:1px;background:rgba(255,255,255,0.15);margin:12px 0;}
+.officer-contact-row{display:flex;flex-direction:column;gap:4px;margin-top:6px;}
+.officer-contact-link{color:rgba(255,255,255,0.8);font-size:11px;text-decoration:none;display:inline-block;}
+.officer-contact-link:hover{color:white;text-decoration:underline;}
+.officer-action-btn{margin-top:10px;background:rgba(255,255,255,0.12);color:white;border:1px solid rgba(255,255,255,0.28);border-radius:5px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;transition:all .2s;}
+.officer-action-btn:hover{background:rgba(255,255,255,0.22);}
+
+@media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout">
+  <div id="sidebar-mount"></div>
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <a href="/dashboard" class="btn btn-outline btn-sm" style="margin-bottom:8px">← Dashboard</a>
+        <div class="page-title" id="app-title">Loading…</div>
+        <div class="page-subtitle" id="app-subtitle"></div>
+      </div>
+      <div id="action-buttons" class="flex gap-8"></div>
+    </div>
+    <div id="page-alert"></div>
+    <div class="workflow-bar" id="workflow-bar"></div>
+    <div class="movement-bar" id="movement-bar"></div>
+    <div class="app-info-grid" id="app-info-grid"></div>
+    <div id="ai-report-zone"></div>
+
+    <div class="two-col">
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📜 Case File Timeline</span>
+            <div class="filter-pills" id="tl-filters">
+              <span class="filter-pill active" onclick="filterTL('',this)">All</span>
+              <span class="filter-pill" onclick="filterTL('ai_screen',this)">🤖 AI</span>
+              <span class="filter-pill" onclick="filterTL('submission',this)">Submissions</span>
+              <span class="filter-pill" onclick="filterTL('issue',this)">Issues</span>
+              <span class="filter-pill" onclick="filterTL('response',this)">Responses</span>
+              <span class="filter-pill" onclick="filterTL('file_upload,file_update',this)">Docs</span>
+              <span class="filter-pill" onclick="filterTL('meeting',this)">Meetings</span>
+              <span class="filter-pill" onclick="filterTL('decision',this)">Decisions</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="timeline-list" id="timeline-list"><div style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="officer-panel" id="officer-panel"></div>
+        <div id="action-panels"></div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">📎 All Documents</span></div>
+          <div id="doc-history-list"><div style="padding:14px;text-align:center;color:var(--text-muted)">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modals -->
+<div class="modal-overlay" id="eds-modal"><div class="modal">
+  <div class="modal-header"><span class="modal-title">🔴 Raise EDS</span><button class="modal-close" onclick="closeModal('eds-modal')">×</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label class="form-label">Issue Description *</label><textarea id="eds-issue" class="form-control" rows="4" placeholder="Describe the data shortfall…"></textarea></div>
+    <div class="form-group"><label class="form-label">Requested Document</label><input type="text" id="eds-doc" class="form-control" placeholder="e.g. Forest NOC"></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('eds-modal')">Cancel</button><button class="btn btn-danger" onclick="submitEDS()">Raise EDS</button></div>
+</div></div>
+
+<div class="modal-overlay" id="refer-modal"><div class="modal">
+  <div class="modal-header"><span class="modal-title">📤 Refer to EAC Meeting</span><button class="modal-close" onclick="closeModal('refer-modal')">×</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label class="form-label">Remarks</label><textarea id="refer-remarks" class="form-control" rows="3"></textarea></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('refer-modal')">Cancel</button><button class="btn btn-accent" onclick="submitRefer()">Refer to EAC</button></div>
+</div></div>
+
+<div class="modal-overlay" id="mom-modal"><div class="modal">
+  <div class="modal-header"><span class="modal-title">📋 Generate MoM</span><button class="modal-close" onclick="closeModal('mom-modal')">×</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label class="form-label">Meeting Discussion *</label><textarea id="mom-discussion" class="form-control" rows="5" placeholder="Summarize EAC discussion and recommendations…"></textarea></div>
+    <div class="form-group"><label class="form-label">Upload MoM Document</label>
+      <div class="drop-zone" onclick="document.getElementById('mom-file').click()"><div class="drop-zone-icon">📄</div><div class="drop-zone-text">Click to upload MoM PDF</div></div>
+      <input type="file" id="mom-file" accept=".pdf,.docx" onchange="previewFile('mom-file','mom-file-prev')">
+      <div id="mom-file-prev" class="file-list"></div>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('mom-modal')">Cancel</button><button class="btn btn-primary" onclick="submitMoM()">Generate MoM</button></div>
+</div></div>
+
+<div class="modal-overlay" id="finalize-modal"><div class="modal">
+  <div class="modal-header"><span class="modal-title">✅ Issue Final Decision</span><button class="modal-close" onclick="closeModal('finalize-modal')">×</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label class="form-label">Decision</label>
+      <select id="final-decision" class="form-control"><option value="GRANTED">EC GRANTED</option><option value="GRANTED_WITH_CONDITIONS">GRANTED with Conditions</option><option value="REJECTED">REJECTED</option></select></div>
+    <div class="form-group"><label class="form-label">Remarks</label><textarea id="final-remarks" class="form-control" rows="3"></textarea></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('finalize-modal')">Cancel</button><button class="btn btn-primary" onclick="submitFinalize()">Issue Decision</button></div>
+</div></div>
+
+<div class="modal-overlay" id="gist-modal"><div class="modal" style="max-width:680px">
+  <div class="modal-header"><span class="modal-title">🤖 AI Gist Document</span><button class="modal-close" onclick="closeModal('gist-modal')">×</button></div>
+  <div class="modal-body">
+    <pre id="gist-content" style="background:var(--surface2);padding:14px;border-radius:8px;font-size:12px;font-family:var(--font-mono);white-space:pre-wrap;max-height:400px;overflow-y:auto;line-height:1.6">Loading…</pre>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('gist-modal')">Close</button><button class="btn btn-primary" onclick="copyGist()">📋 Copy Gist</button></div>
+</div></div>
+
+<!-- Assign Officer Modal -->
+<div class="modal-overlay" id="assign-modal"><div class="modal">
+  <div class="modal-header">
+    <span class="modal-title" id="assign-modal-title">Assign Officer</span>
+    <button class="modal-close" onclick="closeModal('assign-modal')">×</button>
+  </div>
+  <div class="modal-body">
+    <p class="text-muted text-sm" style="margin-bottom:14px">Select an available officer from the list. Full contact details are shown. The Project Proponent will be notified by email.</p>
+    <div class="form-group">
+      <label class="form-label">Select Officer</label>
+      <select id="assign-officer-select" class="form-control" size="5" style="height:auto"></select>
+    </div>
+    <div id="assign-officer-preview" style="margin-top:12px"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('assign-modal')">Cancel</button>
+    <button id="assign-confirm-btn" class="btn btn-primary">✓ Assign Officer</button>
+  </div>
+</div></div>
+
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+const appId=new URLSearchParams(location.search).get('id');
+let currentUser=null, appData=null, allEvents=[];
+
+const WF_STEPS=[
+  {key:'Draft',label:'Draft',icon:'📝'},
+  {key:'Submitted',label:'Submitted',icon:'📬'},
+  {key:'AIScreening',label:'AI Screen',icon:'🤖'},
+  {key:'Scrutiny',label:'Scrutiny',icon:'🔍'},
+  {key:'EDS',label:'EDS',icon:'🔴'},
+  {key:'Resubmitted',label:'Response',icon:'📩'},
+  {key:'Referred',label:'Referred',icon:'🏛️'},
+  {key:'MoMGenerated',label:'MoM',icon:'📋'},
+  {key:'Finalized',label:'Final',icon:'✅'},
+];
+const ORDER=WF_STEPS.map(s=>s.key);
+const EVT_ICONS={submission:'📬',issue:'🔴',response:'📩',file_upload:'📎',file_update:'🔄',verification:'🔍',meeting:'🏛️',decision:'⚖️',ai_screen:'🤖'};
+
+async function init(){
+  if(!appId){location.href='/dashboard';return;}
+  currentUser=await requireAuth();
+  if(!currentUser)return;
+  const {topbarHtml,sidebarHtml,chatbotHtml}=renderShell('',currentUser.role);
+  document.getElementById('topbar-mount').innerHTML=topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML=sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML=chatbotHtml;
+  renderTopbar(currentUser); initGlobalSearch(); initChatbot();
+  await loadAll();
+}
+
+async function loadAll(){
+  try{
+    appData=await apiFetch(`/application/${appId}`);
+    allEvents=await apiFetch(`/timeline/${appId}`);
+    const docs=await apiFetch(`/documents/${appId}`);
+    renderHeader(appData); renderWorkflow(appData.status); renderMovement(appData.status);
+    renderAppInfo(appData); renderOfficer(appData); renderTimeline(allEvents,docs);
+    renderDocHistory(docs); renderActionPanels(appData,docs); renderActionButtons(appData);
+    renderAIReport(appData);
+  }catch(e){document.getElementById('page-alert').innerHTML=`<div class="alert alert-error">⚠️ ${e.message}</div>`;}
+}
+
+function renderHeader(app){
+  document.title=`${app.id} – PARIVESH 3.0`;
+  document.getElementById('app-title').textContent=app.project_name;
+  document.getElementById('app-subtitle').innerHTML=`<span class="app-id">${app.id}</span> · ${app.sector} · ${app.location}`;
+}
+
+function renderWorkflow(status){
+  const ci=ORDER.indexOf(status);
+  let html='';
+  WF_STEPS.forEach((step,i)=>{
+    const done=i<ci,active=i===ci;
+    const cls=done?'done':active?(step.key==='EDS'?'danger':step.key==='AIScreening'?'ai':'active'):'';
+    if(i>0)html+=`<div class="wf-connector ${done?'done':''}"></div>`;
+    html+=`<div class="wf-step"><div class="wf-dot ${cls}">${done?'✓':step.icon}</div><div class="wf-label ${active?'active':''}">${step.label}</div></div>`;
+  });
+  document.getElementById('workflow-bar').innerHTML=html;
+}
+
+function renderMovement(status){
+  const moves=['Applicant','AI Screening','Scrutiny','EAC / MoM','Finalized'];
+  const atIdx=status==='Finalized'?4:['MoMGenerated','Referred'].includes(status)?3:['Scrutiny','EDS','Resubmitted'].includes(status)?2:status==='AIScreening'?1:0;
+  let html='<strong style="font-size:10.5px;color:var(--text-muted);margin-right:6px;white-space:nowrap">FILE AT:</strong>';
+  moves.forEach((m,i)=>{
+    if(i>0)html+=`<span class="movement-arrow">→</span>`;
+    html+=`<div class="movement-step ${i<atIdx?'done':i===atIdx?'active':'pending'}">${m}</div>`;
+  });
+  document.getElementById('movement-bar').innerHTML=html;
+}
+
+function renderAppInfo(app){
+  document.getElementById('app-info-grid').innerHTML=`
+    <div><div class="info-item-label">Project</div><div class="info-item-value">${app.project_name}</div>
+         <div class="info-item-label" style="margin-top:10px">Sector / Category</div><div class="info-item-value">${app.sector} – ${app.category}</div></div>
+    <div><div class="info-item-label">Location</div><div class="info-item-value">${app.location}</div>
+         <div class="info-item-label" style="margin-top:10px">Capacity</div><div class="info-item-value">${app.capacity||'–'}</div></div>
+    <div><div class="info-item-label">Status</div><div class="info-item-value">${statusBadge(app.status)}</div>
+         <div class="info-item-label" style="margin-top:10px">AI Score</div><div class="info-item-value">${app.ai_score?`<span style="color:var(--ai-color);font-family:var(--font-mono);font-weight:700">${app.ai_score}%</span>`:'–'}</div></div>
+    <div style="text-align:right"><div class="info-item-label">App ID</div><div class="app-id" style="font-size:15px">${app.id}</div>
+         <div class="info-item-label" style="margin-top:10px">Filed</div><div class="info-item-value" style="font-size:12px">${fmtDateShort(app.created_at)}</div></div>`;
+}
+
+function renderOfficer(app){
+  const panel = document.getElementById('officer-panel');
+
+  // ── Helper: build full contact card ──────────────────────────────────────
+  function officerCard(label, ini, name, dept, email, phone, canUnassign, unassignFn) {
+    return `
+      <div class="officer-section">
+        <div class="officer-label">${label}</div>
+        <div class="officer-avatar-lg">${ini}</div>
+        <div class="officer-name">${name}</div>
+        <div class="officer-dept">${dept||''}</div>
+        <div class="officer-contact-row">
+          ${email ? `<a href="mailto:${email}" class="officer-contact-link">✉ ${email}</a>` : ''}
+          ${phone ? `<span class="officer-contact-link">📞 ${phone}</span>` : ''}
+        </div>
+        ${canUnassign ? `<button onclick="${unassignFn}()" class="officer-action-btn">⟲ Unassign Officer</button>` : ''}
+      </div>`;
+  }
+
+  // ── Helper: unassigned state with assign button ───────────────────────────
+  function unassignedCard(label, roleForAssign, assignFn) {
+    const canAssign = ['Admin'].includes(currentUser.role);
+    return `
+      <div class="officer-section">
+        <div class="officer-label">${label}</div>
+        <div class="officer-avatar-lg" style="opacity:.45">?</div>
+        <div class="officer-name" style="opacity:.7">Unassigned</div>
+        <div class="officer-dept" style="opacity:.55">Awaiting assignment</div>
+        ${canAssign ? `<button onclick="${assignFn}()" class="officer-action-btn" style="background:rgba(255,255,255,0.22)">+ Assign Officer</button>` : ''}
+      </div>`;
+  }
+
+  const canUnassignScrutiny = ['Admin'].includes(currentUser.role) && app.officer_name;
+  const canUnassignMoM      = ['Admin'].includes(currentUser.role) && app.mom_officer_name;
+  const showMoM = ['Referred','MoMGenerated','Finalized'].includes(app.status);
+
+  let html = '';
+
+  // Scrutiny officer
+  if (app.officer_name) {
+    const ini = app.officer_name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    html += officerCard('Scrutiny Officer', ini,
+      app.officer_name, app.officer_dept,
+      app.officer_email, app.officer_phone,
+      canUnassignScrutiny, 'unassignScrutiny');
+  } else {
+    html += unassignedCard('Scrutiny Officer', 'Scrutiny', 'openAssignScrutiny');
+  }
+
+  // MoM officer (only for later stages)
+  if (showMoM) {
+    html += '<div class="officer-divider"></div>';
+    if (app.mom_officer_name) {
+      const ini2 = app.mom_officer_name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+      html += officerCard('MoM Secretariat Officer', ini2,
+        app.mom_officer_name, app.mom_officer_dept,
+        app.mom_officer_email, app.mom_officer_phone,
+        canUnassignMoM, 'unassignMoM');
+    } else {
+      html += unassignedCard('MoM Secretariat Officer', 'MoM', 'openAssignMoM');
+    }
+  }
+
+  panel.innerHTML = html;
+}
+
+function renderAIReport(app){
+  const zone=document.getElementById('ai-report-zone');
+  if(!app.ai_report||app.ai_report===''||app.ai_report==='{}'){zone.innerHTML='';return;}
+  let rpt;
+  try{rpt=JSON.parse(app.ai_report);}catch{zone.innerHTML='';return;}
+  const passed=rpt.passed;
+  const issues=(rpt.issues||[]);
+  const warns=(rpt.warnings||[]);
+  const checks=(rpt.checks_passed||[]);
+  zone.innerHTML=`
+    <div class="ai-report-card fade-in" style="margin-bottom:16px">
+      <div class="ai-report-header">
+        <div class="ai-score-ring" style="${passed?'border-color:var(--green);color:var(--green)':'border-color:var(--red);color:var(--red)'}">${rpt.score||0}%</div>
+        <div>
+          <div class="ai-report-title" style="color:${passed?'var(--green)':'var(--red)'}">🤖 AI Pre-Screen ${passed?'PASSED ✅':'FAILED ❌'}</div>
+          <div class="ai-report-subtitle">${rpt.recommendation||''}</div>
+        </div>
+      </div>
+      ${issues.length?`<div style="margin-bottom:8px"><strong style="font-size:11px;color:var(--red)">ISSUES FOUND:</strong>
+        ${issues.map(iss=>`<div class="ai-issue"><strong>${iss.category}:</strong><br>${(iss.items||[]).map(i=>`• ${i}`).join('<br>')}</div>`).join('')}</div>`:''}
+      ${warns.length?`<div style="margin-bottom:8px"><strong style="font-size:11px;color:var(--orange)">WARNINGS:</strong>
+        ${warns.map(w=>`<div class="ai-warn">⚠ ${w}</div>`).join('')}</div>`:''}
+      ${checks.length?`<div><strong style="font-size:11px;color:var(--green)">CHECKS PASSED:</strong>
+        ${checks.map(c=>`<div class="ai-pass">✓ ${c}</div>`).join('')}</div>`:''}
+    </div>`;
+}
+
+function renderTimeline(events, docs){
+  const docsById={};
+  docs.forEach(d=>docsById[d.id]=d);
+  const list=document.getElementById('timeline-list');
+  if(!events.length){list.innerHTML='<div class="empty-state"><div class="empty-state-icon">📜</div><div class="empty-state-text">No timeline events</div></div>';return;}
+  list.innerHTML=events.map(ev=>{
+    const icon=EVT_ICONS[ev.event_type]||'📌';
+    const isAI=ev.ai_generated||ev.event_type==='ai_screen';
+    let docHtml='';
+    if(ev.attachment){
+      const att=ev.attachment;
+      const isUpd=ev.event_type==='file_update'||ev.event_type==='response';
+      docHtml=`<div class="doc-version-block">`;
+      if(att.prev_original_name&&isUpd){
+        docHtml+=`<div class="doc-version-title">Document Version Update</div>
+          <div class="doc-card previous"><span class="doc-icon">📄</span><div class="doc-info"><div class="doc-name">Previous: ${att.prev_original_name}</div><div class="doc-meta">v${att.prev_version}</div></div>
+          <span class="version-tag prev">v${att.prev_version}</span><a href="/api/download/${att.prev_id}" class="doc-download" target="_blank">↓</a></div>
+          <div style="text-align:center;font-size:16px;color:var(--accent);margin:2px">↓</div>
+          <div class="doc-card updated"><span class="doc-icon">📄</span><div class="doc-info"><div class="doc-name">Updated: ${att.original_name}</div><div class="doc-meta">v${att.version}</div></div>
+          <span class="version-tag">v${att.version}</span><a href="/api/download/${att.id}" class="doc-download" target="_blank">↓</a></div>`;
+      }else{
+        docHtml+=`<div class="doc-version-title">Attached Document</div>
+          <div class="doc-card"><span class="doc-icon">📄</span><div class="doc-info"><div class="doc-name">${att.original_name}</div><div class="doc-meta">${att.document_type} · v${att.version}</div></div>
+          <span class="version-tag">v${att.version}</span><a href="/api/download/${att.id}" class="doc-download" target="_blank">↓ Download</a></div>`;
+      }
+      docHtml+=`</div>`;
+    }
+    return `<div class="timeline-card">
+      <div class="timeline-dot dot-${ev.event_type}">${icon}</div>
+      <div class="timeline-body ${isAI?'ai-event':''}">
+        <div class="timeline-meta">
+          <div>
+            <div class="timeline-actor ${isAI?'ai':''}">${ev.actor_name||'System'}</div>
+            <div class="timeline-dept">${ev.department||''}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="timeline-time">${fmtDate(ev.datetime)}</div>
+            <div class="timeline-event-chip ${isAI?'ai':''}" style="margin-top:3px">${ev.event_type}</div>
+          </div>
+        </div>
+        <div class="timeline-message">${ev.message}</div>
+        ${ev.status_after_event?`<div style="margin-top:8px">${statusBadge(ev.status_after_event)}</div>`:''}
+        ${docHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterTL(type, el){
+  document.querySelectorAll('.filter-pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  const types=type?type.split(','):[];
+  const filtered=types.length?allEvents.filter(e=>types.includes(e.event_type)):allEvents;
+  apiFetch(`/documents/${appId}`).then(docs=>renderTimeline(filtered,docs));
+}
+
+function renderDocHistory(docs){
+  const el=document.getElementById('doc-history-list');
+  if(!docs.length){el.innerHTML='<div class="empty-state" style="padding:18px"><div class="empty-state-icon">📎</div><div class="empty-state-text">No documents</div></div>';return;}
+  el.innerHTML=docs.map(d=>`
+    <div class="doc-history-item">
+      <span class="version-chip ${d.version>1?'':'old'}">v${d.version}</span>
+      ${d.is_affidavit?`<span class="affidavit-chip">📜 AFF</span>`:''}
+      <span style="font-size:17px">📄</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.original_name}</div>
+        <div class="text-xs text-muted">${d.document_type} · ${fmtDateShort(d.uploaded_at)}</div>
+      </div>
+      <a href="/api/download/${d.id}" class="doc-download" target="_blank">↓</a>
+    </div>`).join('');
+}
+
+function renderActionPanels(app, docs){
+  const el=document.getElementById('action-panels');
+  el.innerHTML='';
+  const role=currentUser.role;
+
+  // Scrutiny actions
+  if(role==='Scrutiny'&&['Scrutiny','Resubmitted'].includes(app.status)){
+    el.innerHTML+=aPanel('🔍 Scrutiny Actions',`
+      <button class="btn btn-primary w-full" onclick="verifyDocs()" style="margin-bottom:8px">✅ Mark Documents Verified</button>
+      <button class="btn btn-danger w-full" onclick="openModal('eds-modal')" style="margin-bottom:8px">🔴 Raise EDS</button>
+      <button class="btn btn-accent w-full" onclick="openModal('refer-modal')">📤 Refer to EAC Meeting</button>`);
+    el.innerHTML+=aPanel('🤖 View AI Gist',`
+      <p class="text-muted text-sm" style="margin-bottom:10px">Auto-generated summary document for EAC review.</p>
+      <button class="btn btn-ai w-full" onclick="viewGist()">📄 Generate &amp; View Gist</button>`);
+  }
+
+  // PP actions for EDS
+  if(role==='PP'&&app.status==='EDS'&&app.created_by===currentUser.id){
+    const docOptions=docs.map(d=>`<option value="${d.id}">v${d.version} – ${d.original_name}</option>`).join('');
+    el.innerHTML+=aPanel('📩 Respond to EDS',`
+      <div class="form-group"><label class="form-label">Response Message</label>
+        <textarea id="resp-msg" class="form-control" rows="3" placeholder="Explain your response…"></textarea></div>
+      <div class="form-group"><label class="form-label">Upload Updated Document</label>
+        <div class="drop-zone" onclick="document.getElementById('resp-file').click()">
+          <div class="drop-zone-icon">📎</div><div class="drop-zone-text">Click to upload</div>
+          <div class="drop-zone-hint">PDF, DOCX, XLSX · max 20MB</div></div>
+        <input type="file" id="resp-file" accept=".pdf,.docx,.xlsx" onchange="previewFile('resp-file','resp-prev')">
+        <div id="resp-prev" class="file-list"></div></div>
+      <div class="form-group"><label class="form-label">Document Type</label>
+        <input type="text" id="resp-doc-type" class="form-control" placeholder="e.g. Forest NOC"></div>
+      <div class="form-group"><label class="form-label">Replaces Previous Doc (optional)</label>
+        <select id="resp-prev-id" class="form-control"><option value="">– New document –</option>${docOptions}</select></div>
+      <button class="btn btn-primary w-full" onclick="submitResponse()">Submit EDS Response</button>`);
+  }
+
+  // MoM actions
+  if(role==='MoM'&&app.status==='Referred'){
+    el.innerHTML+=aPanel('📋 Generate MoM',`
+      <button class="btn btn-primary w-full" onclick="openModal('mom-modal')" style="margin-bottom:8px">Generate Minutes of Meeting</button>
+      <button class="btn btn-ai w-full" onclick="viewGist()">🤖 View AI Gist</button>`);
+  }
+
+  // Finalize
+  if(['Admin','MoM'].includes(role)&&app.status==='MoMGenerated'){
+    el.innerHTML+=aPanel('⚖️ Final Decision',`<button class="btn btn-primary w-full" onclick="openModal('finalize-modal')">Issue Final Decision</button>`);
+  }
+}
+
+function renderActionButtons(app){
+  const el=document.getElementById('action-buttons');
+  let html='';
+  if(currentUser.role==='PP'&&app.status==='Draft'&&app.created_by===currentUser.id)
+    html+=`<button class="btn btn-accent" onclick="quickSubmit()">🚀 Submit Application</button>`;
+  if(['Scrutiny','Admin'].includes(currentUser.role)&&app.status==='Scrutiny')
+    html+=`<button class="btn btn-outline" onclick="beginScrutiny()">🔍 Assign to Me</button>`;
+  el.innerHTML=html;
+}
+
+function aPanel(title, body){
+  return `<div class="action-panel"><div class="action-panel-header">${title}</div><div class="action-panel-body">${body}</div></div>`;
+}
+
+function previewFile(inputId, previewId){
+  const f=document.getElementById(inputId).files[0];
+  const el=document.getElementById(previewId);
+  if(f&&el) el.innerHTML=`<div class="file-item"><span class="file-item-icon">📄</span><span class="file-item-name">${f.name}</span><span class="file-item-size">${(f.size/1024).toFixed(0)} KB</span></div>`;
+}
+
+// ── ACTIONS ──────────────────────────────────────────────────────────────────
+async function quickSubmit(){
+  if(!confirm('Submit this application? AI pre-screening will run immediately.'))return;
+  const fd=new FormData();
+  try{
+    const res=await apiFetch(`/application/${appId}/submit`,{method:'POST'});
+    const rpt=res.ai_report||{};
+    showToast(rpt.passed?`✅ AI PASSED (${rpt.score}%)`:`❌ AI FAILED (${rpt.score}%) — EDS raised`,rpt.passed?'success':'error');
+    loadAll();
+  }catch(e){showToast(e.message,'error');}
+}
+
+async function beginScrutiny(){
+  try{await apiFetch(`/scrutiny/begin/${appId}`,{method:'POST'});showToast('Assigned!','success');loadAll();}
+  catch(e){showToast(e.message,'error');}
+}
+
+async function verifyDocs(){
+  const rem=prompt('Verification remarks (optional):');
+  if(rem===null)return;
+  try{await apiFetch(`/scrutiny/verify/${appId}`,{method:'POST',body:JSON.stringify({remarks:rem})});showToast('Verification recorded','success');loadAll();}
+  catch(e){showToast(e.message,'error');}
+}
+
+async function submitEDS(){
+  const issue=document.getElementById('eds-issue').value.trim();
+  if(!issue){showToast('Describe the issue','warning');return;}
+  try{
+    await apiFetch('/scrutiny/raise-eds',{method:'POST',body:JSON.stringify({application_id:appId,issue_description:issue,requested_document:document.getElementById('eds-doc').value.trim()})});
+    closeModal('eds-modal');showToast('EDS raised','success');loadAll();
+  }catch(e){showToast(e.message,'error');}
+}
+
+async function submitRefer(){
+  try{
+    await apiFetch(`/scrutiny/refer/${appId}`,{method:'POST',body:JSON.stringify({remarks:document.getElementById('refer-remarks').value})});
+    closeModal('refer-modal');showToast('Application referred','success');loadAll();
+  }catch(e){showToast(e.message,'error');}
+}
+
+async function submitResponse(){
+  const msg=document.getElementById('resp-msg').value.trim();
+  const file=document.getElementById('resp-file').files[0];
+  const type=document.getElementById('resp-doc-type').value.trim()||'Updated Document';
+  const prevId=document.getElementById('resp-prev-id').value;
+  const fd=new FormData();
+  fd.append('application_id',appId);
+  fd.append('response_text',msg);
+  if(file){fd.append('updated_doc',file);fd.append('updated_doc_type',type);if(prevId)fd.append('updated_doc_prev_id',prevId);}
+  try{await apiForm('/application/respond',fd);showToast('Response submitted!','success');loadAll();}
+  catch(e){showToast(e.message,'error');}
+}
+
+async function submitMoM(){
+  const disc=document.getElementById('mom-discussion').value.trim();
+  if(!disc){showToast('Add discussion summary','warning');return;}
+  const file=document.getElementById('mom-file').files[0];
+  const fd=new FormData();
+  fd.append('application_id',appId);fd.append('discussion',disc);
+  if(file)fd.append('mom_document',file);
+  try{await apiForm('/mom/generate',fd);closeModal('mom-modal');showToast('MoM generated!','success');loadAll();}
+  catch(e){showToast(e.message,'error');}
+}
+
+async function submitFinalize(){
+  try{
+    await apiFetch(`/application/${appId}/finalize`,{method:'POST',body:JSON.stringify({decision:document.getElementById('final-decision').value,remarks:document.getElementById('final-remarks').value})});
+    closeModal('finalize-modal');showToast('Decision issued!','success');loadAll();
+  }catch(e){showToast(e.message,'error');}
+}
+
+async function viewGist(){
+  openModal('gist-modal');
+  document.getElementById('gist-content').textContent='Generating AI Gist…';
+  try{
+    const res=await apiFetch(`/application/${appId}/gist`);
+    document.getElementById('gist-content').textContent=res.gist||'No gist available.';
+  }catch(e){document.getElementById('gist-content').textContent='Error: '+e.message;}
+}
+
+function copyGist(){
+  const txt=document.getElementById('gist-content').textContent;
+  navigator.clipboard.writeText(txt).then(()=>showToast('Gist copied to clipboard','success'));
+}
+
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+// ── ASSIGN / UNASSIGN OFFICERS ────────────────────────────────────────────────
+let scrutinyOfficers = [], momOfficers = [];
+
+async function openAssignScrutiny() {
+  if (!scrutinyOfficers.length) {
+    try { scrutinyOfficers = await apiFetch('/officers/Scrutiny'); } catch(e) { showToast(e.message,'error'); return; }
+  }
+  openAssignModal('Scrutiny Officer', scrutinyOfficers, 'doAssignScrutiny');
+}
+
+async function openAssignMoM() {
+  if (!momOfficers.length) {
+    try { momOfficers = await apiFetch('/officers/MoM'); } catch(e) { showToast(e.message,'error'); return; }
+  }
+  openAssignModal('MoM Secretariat Officer', momOfficers, 'doAssignMoM');
+}
+
+function openAssignModal(role, officers, confirmFn) {
+  const opts = officers.map(o =>
+    `<option value="${o.id}">${o.name} — ${o.department||role} ${o.phone?'| 📞 '+o.phone:''}</option>`
+  ).join('');
+  document.getElementById('assign-modal-title').textContent = `Assign ${role}`;
+  document.getElementById('assign-officer-select').innerHTML = opts;
+  document.getElementById('assign-confirm-btn').onclick = window[confirmFn];
+  document.getElementById('assign-modal').classList.add('open');
+}
+
+async function doAssignScrutiny() {
+  const oid = document.getElementById('assign-officer-select').value;
+  try {
+    const res = await apiFetch(`/scrutiny/assign/${appId}`, {method:'POST', body:JSON.stringify({officer_id:parseInt(oid)})});
+    closeModal('assign-modal');
+    showToast(res.message + ' — PP notified by email.', 'success');
+    scrutinyOfficers = []; loadAll();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function doAssignMoM() {
+  const oid = document.getElementById('assign-officer-select').value;
+  try {
+    const res = await apiFetch(`/mom/assign/${appId}`, {method:'POST', body:JSON.stringify({officer_id:parseInt(oid)})});
+    closeModal('assign-modal');
+    showToast(res.message + ' — PP notified by email.', 'success');
+    momOfficers = []; loadAll();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function unassignScrutiny() {
+  const reason = prompt('Reason for unassigning Scrutiny Officer (optional):');
+  if (reason === null) return;
+  try {
+    const res = await apiFetch(`/scrutiny/unassign/${appId}`, {method:'POST', body:JSON.stringify({reason:reason||'Unassigned by Admin.'})});
+    showToast(res.message + ' — PP notified by email.', 'success');
+    loadAll();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function unassignMoM() {
+  const reason = prompt('Reason for unassigning MoM Officer (optional):');
+  if (reason === null) return;
+  try {
+    const res = await apiFetch(`/mom/unassign/${appId}`, {method:'POST', body:JSON.stringify({reason:reason||'Unassigned by Admin.'})});
+    showToast(res.message + ' — PP notified by email.', 'success');
+    loadAll();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+init();
+</script>
+</body></html>

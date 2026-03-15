@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>New Application – PARIVESH 3.0</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+.step-bar{display:flex;gap:0;margin-bottom:22px;}
+.step{flex:1;padding:10px 14px;text-align:center;font-size:12px;font-weight:600;color:var(--text-muted);border-bottom:3px solid var(--border);transition:var(--transition);}
+.step.active{color:var(--primary);border-bottom-color:var(--primary);}
+.step.done{color:var(--green);border-bottom-color:var(--green);}
+.step-content{display:none;animation:fadeIn .25s ease;}
+.step-content.active{display:block;}
+.checklist-grid{display:flex;flex-direction:column;gap:6px;}
+.progress-bar{height:4px;background:var(--surface2);border-radius:4px;margin-bottom:6px;}
+.progress-fill{height:100%;border-radius:4px;background:var(--green);transition:width .4s ease;}
+.pay-method-card{padding:14px 12px;border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:var(--transition);text-align:center;background:var(--surface);}
+.pay-method-card:hover{border-color:var(--primary-light);background:#EFF6FF;}
+.pay-method-card.selected{border-color:var(--primary);background:#EFF6FF;box-shadow:0 0 0 3px rgba(21,101,192,.12);}
+</style>
+</head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout">
+  <div id="sidebar-mount"></div>
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <a href="/dashboard" class="btn btn-outline btn-sm" style="margin-bottom:8px">← Back</a>
+        <div class="page-title">New Environmental Clearance Application</div>
+        <div class="page-subtitle">Complete all steps — AI pre-screening runs on submission</div>
+      </div>
+    </div>
+    <div id="form-alert"></div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:start">
+      <div>
+        <div class="step-bar">
+          <div class="step active" id="step-tab-1">1 · Project Details</div>
+          <div class="step" id="step-tab-2">2 · Documents</div>
+          <div class="step" id="step-tab-3">3 · Affidavits</div>
+          <div class="step" id="step-tab-4">4 · Review</div>
+          <div class="step" id="step-tab-5">5 · Pay &amp; Submit</div>
+        </div>
+
+        <!-- STEP 1 -->
+        <div class="step-content active" id="step-1">
+          <div class="card"><div class="card-header"><span class="card-title">📋 Project Details</span></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Project Name *</label>
+              <input type="text" id="proj-name" class="form-control" placeholder="Full name as per DPR">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Sector *</label>
+                <select id="proj-sector" class="form-control" onchange="onSectorChange()">
+                  <option value="">Select Sector</option>
+                  <option>Sand Mining</option><option>Limestone Mining</option><option>Brick Kiln</option>
+                  <option>Infrastructure</option><option>Industry</option><option>Energy</option>
+                  <option>Coastal</option><option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Category *</label>
+                <select id="proj-category" class="form-control">
+                  <option value="">Select</option>
+                  <option value="A">Category A</option><option value="B1">Category B1</option><option value="B2">Category B2</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Project Location *</label>
+              <input type="text" id="proj-location" class="form-control" placeholder="District, State">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Capacity / Production</label>
+                <input type="text" id="proj-capacity" class="form-control" placeholder="e.g. 50,000 MT/year">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Area (Hectares)</label>
+                <input type="text" id="proj-area" class="form-control" placeholder="e.g. 25.5">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Project Description *</label>
+              <textarea id="proj-desc" class="form-control" rows="4" placeholder="Detailed description of the project scope, scale, and environmental considerations (min 20 characters)…"></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" onclick="goStep(2)">Next: Documents →</button></div>
+          </div></div>
+        </div>
+
+        <!-- STEP 2 -->
+        <div class="step-content" id="step-2">
+          <div class="card"><div class="card-header">
+            <span class="card-title">📎 Documents Upload</span>
+            <div>
+              <div class="progress-bar" style="width:160px"><div class="progress-fill" id="doc-progress" style="width:0%"></div></div>
+              <span id="doc-progress-label" class="text-xs text-muted">0 / 0 uploaded</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="checklist-container">
+              <div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Select a sector first to see required documents</div></div>
+            </div>
+            <div class="divider"></div>
+            <div class="flex-between" style="margin-bottom:12px">
+              <strong style="font-size:13px">Additional Documents</strong>
+              <button class="btn btn-outline btn-sm" onclick="addExtraSlot()">+ Add</button>
+            </div>
+            <div id="extra-slots"></div>
+            <div class="flex gap-8 mt-16" style="justify-content:space-between">
+              <button class="btn btn-outline" onclick="goStep(1)">← Back</button>
+              <button class="btn btn-primary" onclick="goStep(3)">Next: Affidavits →</button>
+            </div>
+          </div></div>
+        </div>
+
+        <!-- STEP 3 -->
+        <div class="step-content" id="step-3">
+          <div class="card"><div class="card-header"><span class="card-title">📜 Affidavits &amp; Compliance</span></div>
+          <div class="card-body">
+            <div class="alert alert-info">ℹ️ Upload signed affidavits confirming compliance with environmental regulations. At least one affidavit is required.</div>
+            <div id="affidavit-slots"></div>
+            <button class="btn btn-outline btn-sm" onclick="addAffidavitSlot()" style="margin-bottom:16px">+ Add Affidavit</button>
+            <div class="flex gap-8 mt-8" style="justify-content:space-between">
+              <button class="btn btn-outline" onclick="goStep(2)">← Back</button>
+              <button class="btn btn-primary" onclick="goStep(4)">Next: Review →</button>
+            </div>
+          </div></div>
+        </div>
+
+        <!-- STEP 4 -->
+        <div class="step-content" id="step-4">
+          <div class="card"><div class="card-header"><span class="card-title">📋 Review Application</span></div>
+          <div class="card-body">
+            <div id="review-content"></div>
+            <div class="alert alert-ai mt-12">🤖 <strong>AI Pre-Screening</strong> will run automatically after payment. Our AI checks document completeness against your sector checklist.</div>
+            <div class="form-group mt-12">
+              <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:13px">
+                <input type="checkbox" id="declaration-cb" style="margin-top:3px;flex-shrink:0">
+                <span>I hereby certify that all information and documents submitted are true and correct. I understand that false information may result in rejection and legal action.</span>
+              </label>
+            </div>
+            <div class="flex gap-8 mt-12" style="justify-content:space-between;flex-wrap:wrap">
+              <button class="btn btn-outline" onclick="goStep(3)">← Back</button>
+              <div class="flex gap-8">
+                <button class="btn btn-outline" onclick="saveDraft()">💾 Save Draft</button>
+                <button class="btn btn-primary btn-lg" onclick="goToPayment()">💳 Continue to Payment →</button>
+              </div>
+            </div>
+          </div></div>
+        </div>
+
+        <!-- STEP 5: PAYMENT -->
+        <div class="step-content" id="step-5">
+          <div class="card">
+            <div class="card-header"><span class="card-title">💳 Pay Application Processing Fee</span></div>
+            <div class="card-body">
+
+              <!-- Fee summary box -->
+              <div style="background:linear-gradient(135deg,var(--primary-dark),var(--primary));border-radius:var(--radius);padding:18px 22px;color:white;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                <div>
+                  <div style="font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.5px">Application ID</div>
+                  <div class="font-mono" id="pay-app-id" style="font-size:16px;font-weight:700;margin-top:2px">–</div>
+                  <div id="pay-proj-name" style="font-size:12px;opacity:.75;margin-top:3px">–</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.5px">Processing Fee</div>
+                  <div style="font-family:var(--font-display);font-size:36px;font-weight:700;margin-top:2px" id="pay-amount">₹5,000</div>
+                  <div style="font-size:11px;opacity:.65">Category: <span id="pay-cat">–</span></div>
+                </div>
+              </div>
+
+              <!-- Method selection -->
+              <div class="form-label" style="margin-bottom:10px">Select Payment Method</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px" id="pay-method-grid">
+                <div class="pay-method-card" onclick="selectPayMethod('UPI',this)">
+                  <div style="font-size:22px;margin-bottom:4px">📱</div>
+                  <div style="font-weight:700;font-size:13px">UPI</div>
+                  <div style="font-size:11px;color:var(--text-muted)">Google Pay · PhonePe · BHIM</div>
+                </div>
+                <div class="pay-method-card" onclick="selectPayMethod('Net Banking',this)">
+                  <div style="font-size:22px;margin-bottom:4px">🏦</div>
+                  <div style="font-weight:700;font-size:13px">Net Banking</div>
+                  <div style="font-size:11px;color:var(--text-muted)">All major banks</div>
+                </div>
+                <div class="pay-method-card" onclick="selectPayMethod('Debit/Credit Card',this)">
+                  <div style="font-size:22px;margin-bottom:4px">💳</div>
+                  <div style="font-weight:700;font-size:13px">Debit / Credit Card</div>
+                  <div style="font-size:11px;color:var(--text-muted)">Visa · Mastercard · RuPay</div>
+                </div>
+                <div class="pay-method-card" onclick="selectPayMethod('QR Code',this)">
+                  <div style="font-size:22px;margin-bottom:4px">📷</div>
+                  <div style="font-weight:700;font-size:13px">QR Code</div>
+                  <div style="font-size:11px;color:var(--text-muted)">Scan &amp; Pay instantly</div>
+                </div>
+              </div>
+
+              <!-- UPI input -->
+              <div id="upi-wrap" class="hidden" style="margin-bottom:16px">
+                <div class="form-group"><label class="form-label">UPI ID / VPA</label>
+                  <input type="text" id="pay-upi" class="form-control" placeholder="yourname@upi or 9876543210@paytm"></div>
+              </div>
+              <!-- Card inputs -->
+              <div id="card-wrap" class="hidden" style="margin-bottom:16px">
+                <div class="form-row">
+                  <div class="form-group"><label class="form-label">Card Number</label>
+                    <input type="text" id="pay-card-no" class="form-control" placeholder="•••• •••• •••• ••••" maxlength="19" oninput="fmtCard(this)"></div>
+                  <div class="form-group"><label class="form-label">Expiry (MM/YY)</label>
+                    <input type="text" id="pay-card-exp" class="form-control" placeholder="MM/YY" maxlength="5"></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label class="form-label">Cardholder Name</label>
+                    <input type="text" id="pay-card-name" class="form-control" placeholder="As on card"></div>
+                  <div class="form-group"><label class="form-label">CVV</label>
+                    <input type="password" id="pay-card-cvv" class="form-control" placeholder="•••" maxlength="3"></div>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-muted);background:var(--surface2);padding:10px 14px;border-radius:6px;margin-bottom:20px">
+                🔒 This is a <strong>simulated payment</strong> for demonstration. No real transaction occurs.
+              </div>
+
+              <div id="pay-step-alert"></div>
+
+              <div class="flex gap-8" style="justify-content:space-between">
+                <button class="btn btn-outline" onclick="goStep(4)">← Back</button>
+                <button class="btn btn-primary btn-lg" id="pay-now-btn" onclick="doPayAndSubmit()" disabled>
+                  🔒 Pay &amp; Submit Application
+                </button>
+              </div>
+
+              <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--text-muted)">
+                Transaction ID: <span class="font-mono" id="pay-txn-display">–</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar Info -->
+      <div>
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-header"><span class="card-title">📋 Sector Checklist</span></div>
+          <div class="card-body" id="sidebar-checklist" style="padding:12px 16px">
+            <div class="text-muted text-sm">Select a sector to see required documents</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">🤖 AI Screening</span></div>
+          <div class="card-body" style="padding:12px 16px;font-size:12px;color:var(--text-muted);line-height:1.8">
+            After submission, AI checks:<br>
+            ✅ Mandatory document presence<br>
+            ✅ Affidavit uploaded<br>
+            ✅ Valid file types (PDF/DOCX/XLSX)<br>
+            ✅ Project details complete<br>
+            ✅ EMP present<br>
+            ✅ Processing fee document<br><br>
+            <strong>Score ≥ 100% (no issues)</strong> → Scrutiny queue<br>
+            <strong>Issues found</strong> → EDS raised automatically
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+let currentUser=null, currentStep=1, sectorChecklist=null, appId=null;
+let _payTxnId=null, _selectedPayMethod=null;
+const uploadedDocs={};
+
+async function init(){
+  currentUser=await requireAuth(['PP','Admin']);
+  if(!currentUser)return;
+  const {topbarHtml,sidebarHtml,chatbotHtml}=renderShell('new_app',currentUser.role);
+  document.getElementById('topbar-mount').innerHTML=topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML=sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML=chatbotHtml;
+  renderTopbar(currentUser); initGlobalSearch(); initChatbot();
+  addAffidavitSlot();
+}
+
+function goStep(n){
+  if(n>1 && !validateStep1())return;
+  currentStep=n;
+  for(let i=1;i<=5;i++){
+    document.getElementById(`step-${i}`).classList.toggle('active',i===n);
+    const tab=document.getElementById(`step-tab-${i}`);
+    tab.classList.toggle('active',i===n);
+    tab.classList.toggle('done',i<n);
+  }
+  if(n===4)buildReview();
+}
+
+function validateStep1(){
+  const name=document.getElementById('proj-name').value.trim();
+  const sector=document.getElementById('proj-sector').value;
+  const cat=document.getElementById('proj-category').value;
+  const loc=document.getElementById('proj-location').value.trim();
+  if(!name||!sector||!cat||!loc){
+    document.getElementById('form-alert').innerHTML='<div class="alert alert-error">⚠️ Please fill all required fields in Project Details.</div>';
+    goStep(1);return false;
+  }
+  document.getElementById('form-alert').innerHTML='';
+  return true;
+}
+
+// ── PAYMENT STEP ─────────────────────────────────────────────────────────────
+async function goToPayment(){
+  if(!validateStep1())return;
+  if(!document.getElementById('declaration-cb').checked){
+    showToast('Please accept the declaration.','warning');return;
+  }
+
+  // Create draft first (if not yet done), then upload docs
+  if(!appId){
+    try{
+      appId = await createDraft();
+      await uploadAllDocs(appId);
+    }catch(e){
+      document.getElementById('form-alert').innerHTML=`<div class="alert alert-error">⚠️ ${e.message}</div>`;
+      return;
+    }
+  }
+
+  // Initiate payment → get fee details
+  try{
+    const res = await apiFetch('/payment/initiate',{method:'POST',body:JSON.stringify({application_id:appId})});
+    const fd  = res.fee_details || {};
+    _payTxnId = res.payment?.transaction_id;
+
+    // Already paid → skip to submit
+    if(res.payment?.status === 'SUCCESS'){
+      await _runSubmit();
+      return;
+    }
+
+    document.getElementById('pay-app-id').textContent   = appId;
+    document.getElementById('pay-proj-name').textContent = fd.project_name || '';
+    document.getElementById('pay-amount').textContent    = `₹${(fd.amount||5000).toLocaleString('en-IN')}`;
+    document.getElementById('pay-cat').textContent       = fd.category || '–';
+    document.getElementById('pay-txn-display').textContent = _payTxnId || '–';
+
+    goStep(5);
+  }catch(e){
+    document.getElementById('form-alert').innerHTML=`<div class="alert alert-error">⚠️ ${e.message}</div>`;
+  }
+}
+
+function selectPayMethod(method, el){
+  _selectedPayMethod = method;
+  document.querySelectorAll('.pay-method-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('upi-wrap').classList.toggle('hidden', method!=='UPI');
+  document.getElementById('card-wrap').classList.toggle('hidden', method!=='Debit/Credit Card');
+  document.getElementById('pay-now-btn').disabled = false;
+}
+
+function fmtCard(el){
+  let v=el.value.replace(/\D/g,'').slice(0,16);
+  el.value=v.match(/.{1,4}/g)?.join(' ')||v;
+}
+
+async function doPayAndSubmit(){
+  if(!_selectedPayMethod){showToast('Select a payment method','warning');return;}
+  if(!_payTxnId){showToast('Payment not initiated','error');return;}
+
+  const btn=document.getElementById('pay-now-btn');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span> Processing payment…';
+
+  // Simulate 1.5s processing
+  await new Promise(r=>setTimeout(r,1500));
+
+  try{
+    // 1. Confirm payment
+    await apiFetch('/payment/confirm',{method:'POST',
+      body:JSON.stringify({transaction_id:_payTxnId, payment_method:_selectedPayMethod})});
+
+    showToast('✅ Payment successful!','success');
+    btn.innerHTML='🚀 Submitting application…';
+
+    // 2. Submit and run AI screening
+    await _runSubmit();
+
+  }catch(e){
+    btn.disabled=false;
+    btn.innerHTML='🔒 Pay &amp; Submit Application';
+    document.getElementById('pay-step-alert').innerHTML=`<div class="alert alert-error">⚠️ ${e.message}</div>`;
+  }
+}
+
+async function _runSubmit(){
+  try{
+    const res=await apiFetch(`/application/${appId}/submit`,{method:'POST'});
+    const rpt=res.ai_report||{};
+    if(rpt.passed){
+      showToast(`✅ Payment done · AI PASSED (${rpt.score}%) — Submitted!`,'success');
+    }else{
+      showToast(`✅ Payment done · AI FAILED (${rpt.score}%) — EDS raised`,'error');
+    }
+    setTimeout(()=>location.href=`/case_file?id=${appId}`,1800);
+  }catch(e){
+    showToast('Payment complete but submission failed: '+e.message,'error');
+    setTimeout(()=>location.href=`/case_file?id=${appId}`,2000);
+  }
+}
+
+async function onSectorChange(){
+  const sector=document.getElementById('proj-sector').value;
+  if(!sector)return;
+  try{
+    sectorChecklist=await apiFetch(`/checklist/${encodeURIComponent(sector)}`);
+    renderChecklist(sectorChecklist);
+    renderSidebarChecklist(sectorChecklist);
+  }catch(e){console.error(e);}
+}
+
+function renderChecklist(cl){
+  const cont=document.getElementById('checklist-container');
+  const mandatory=cl.mandatory||[];
+  const optional=cl.optional||[];
+  cont.innerHTML=`
+    <div class="mb-12"><strong style="font-size:13px">Mandatory Documents (${mandatory.length})</strong></div>
+    <div class="checklist-grid" id="mandatory-list">
+      ${mandatory.map((doc,i)=>`
+        <div class="checklist-item ${uploadedDocs[`m_${i}`]?'uploaded':'missing'}" id="cl-m-${i}">
+          <span class="checklist-icon">${uploadedDocs[`m_${i}`]?'✅':'📎'}</span>
+          <div style="flex:1">
+            <div class="checklist-label">${doc}</div>
+            ${uploadedDocs[`m_${i}`]?`<div class="checklist-sub text-muted">✓ ${uploadedDocs['m_'+i].file.name}</div>`:'<div class="checklist-sub" style="color:var(--red)">Required</div>'}
+          </div>
+          <div class="checklist-action">
+            <label class="btn btn-sm ${uploadedDocs[`m_${i}`]?'btn-outline':'btn-primary'}" style="cursor:pointer">
+              ${uploadedDocs[`m_${i}`]?'Replace':'Upload'}
+              <input type="file" accept=".pdf,.docx,.xlsx" style="display:none" onchange="handleChecklistUpload('m_${i}','${doc}',this)">
+            </label>
+          </div>
+        </div>`).join('')}
+    </div>
+    ${optional.length?`
+    <div class="mb-12 mt-16"><strong style="font-size:13px">Optional Documents</strong></div>
+    <div class="checklist-grid">
+      ${optional.map((doc,i)=>`
+        <div class="checklist-item ${uploadedDocs[`o_${i}`]?'uploaded':''}" id="cl-o-${i}">
+          <span class="checklist-icon">${uploadedDocs[`o_${i}`]?'✅':'⬜'}</span>
+          <div style="flex:1"><div class="checklist-label">${doc}</div>${uploadedDocs[`o_${i}`]?`<div class="checklist-sub text-muted">✓ ${uploadedDocs['o_'+i].file.name}</div>`:''}</div>
+          <div class="checklist-action">
+            <label class="btn btn-sm btn-outline" style="cursor:pointer">
+              ${uploadedDocs[`o_${i}`]?'Replace':'Upload'}
+              <input type="file" accept=".pdf,.docx,.xlsx" style="display:none" onchange="handleChecklistUpload('o_${i}','${doc}',this)">
+            </label>
+          </div>
+        </div>`).join('')}
+    </div>`:''}
+  `;
+  updateDocProgress(mandatory.length);
+}
+
+function handleChecklistUpload(key, docType, input){
+  const file=input.files[0]; if(!file)return;
+  uploadedDocs[key]={file, type:docType, isAffidavit:0};
+  onSectorChange();// re-render
+}
+
+function updateDocProgress(total){
+  const uploaded=Object.keys(uploadedDocs).filter(k=>!k.startsWith('aff')).length;
+  const pct=total?Math.round((uploaded/total)*100):0;
+  document.getElementById('doc-progress').style.width=pct+'%';
+  document.getElementById('doc-progress-label').textContent=`${uploaded} / ${total} uploaded`;
+}
+
+function renderSidebarChecklist(cl){
+  const el=document.getElementById('sidebar-checklist');
+  el.innerHTML=`
+    <div style="font-size:11px;margin-bottom:8px;font-weight:700;color:var(--text-muted)">MANDATORY</div>
+    ${cl.mandatory.map(d=>`<div style="font-size:11.5px;padding:3px 0;border-bottom:1px solid var(--border)">${d}</div>`).join('')}
+    ${cl.optional.length?`<div style="font-size:11px;margin:10px 0 6px;font-weight:700;color:var(--text-muted)">OPTIONAL</div>
+    ${cl.optional.map(d=>`<div style="font-size:11.5px;padding:3px 0;border-bottom:1px solid var(--border);color:var(--text-muted)">${d}</div>`).join('')}`:''}
+  `;
+}
+
+let extraCount=0;
+function addExtraSlot(){
+  extraCount++;
+  const id=`extra-${extraCount}`;
+  const div=document.createElement('div');
+  div.id=id;
+  div.style.cssText='border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--surface2)';
+  div.innerHTML=`
+    <div class="form-row" style="align-items:end;margin-bottom:0">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Document Type</label>
+        <input type="text" class="form-control" id="${id}-type" placeholder="e.g. Site Photographs">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">File</label>
+        <label class="btn btn-outline w-full" style="cursor:pointer;justify-content:center" id="${id}-label">
+          📎 Browse
+          <input type="file" accept=".pdf,.docx,.xlsx" onchange="handleExtraUpload('${id}',this)">
+        </label>
+      </div>
+      <button onclick="document.getElementById('${id}').remove()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:20px;padding:4px;flex-shrink:0">×</button>
+    </div>`;
+  document.getElementById('extra-slots').appendChild(div);
+}
+
+function handleExtraUpload(id, input){
+  const file=input.files[0]; if(!file)return;
+  const type=document.getElementById(`${id}-type`).value||'Additional Document';
+  uploadedDocs[id]={file, type, isAffidavit:0};
+  document.getElementById(`${id}-label`).textContent=`✅ ${file.name}`;
+}
+
+let affCount=0;
+const AFF_TYPES=['Affidavit – Environmental Compliance','Affidavit – Mining Safety','Affidavit – CRZ Compliance','Affidavit – Supreme Court Guidelines','Affidavit – Plantation Commitment','Affidavit – Pollution Control'];
+function addAffidavitSlot(){
+  affCount++;
+  const id=`aff-${affCount}`;
+  const div=document.createElement('div');
+  div.id=id;
+  div.style.cssText='border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--ai-bg)';
+  div.innerHTML=`
+    <div class="form-row" style="align-items:end;margin-bottom:0">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Affidavit Type *</label>
+        <select class="form-control" id="${id}-type">${AFF_TYPES.map(t=>`<option>${t}</option>`).join('')}</select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Upload Signed Affidavit *</label>
+        <label class="btn btn-outline w-full" style="cursor:pointer;justify-content:center" id="${id}-label">
+          📜 Browse PDF
+          <input type="file" accept=".pdf,.docx" onchange="handleAffUpload('${id}',this)">
+        </label>
+      </div>
+      ${affCount>1?`<button onclick="document.getElementById('${id}').remove();delete uploadedDocs['${id}']" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:20px;padding:4px;flex-shrink:0">×</button>`:''}
+    </div>`;
+  document.getElementById('affidavit-slots').appendChild(div);
+}
+
+function handleAffUpload(id, input){
+  const file=input.files[0]; if(!file)return;
+  const type=document.getElementById(`${id}-type`).value;
+  uploadedDocs[id]={file, type, isAffidavit:1, affType:type};
+  document.getElementById(`${id}-label`).textContent=`✅ ${file.name}`;
+}
+
+function buildReview(){
+  const name=document.getElementById('proj-name').value.trim();
+  const sector=document.getElementById('proj-sector').value;
+  const cat=document.getElementById('proj-category').value;
+  const loc=document.getElementById('proj-location').value.trim();
+  const docs=Object.values(uploadedDocs);
+  const affidavits=docs.filter(d=>d.isAffidavit);
+  const regularDocs=docs.filter(d=>!d.isAffidavit);
+  document.getElementById('review-content').innerHTML=`
+    <div class="alert alert-info">📋 <strong>Application Summary</strong></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div><div class="info-item-label">Project</div><div class="info-item-value">${name}</div></div>
+      <div><div class="info-item-label">Sector / Category</div><div class="info-item-value">${sector} — ${cat}</div></div>
+      <div><div class="info-item-label">Location</div><div class="info-item-value">${loc}</div></div>
+      <div><div class="info-item-label">Docs + Affidavits</div><div class="info-item-value">${regularDocs.length} docs + ${affidavits.length} affidavit(s)</div></div>
+    </div>
+    ${affidavits.length===0?'<div class="alert alert-error">⚠️ No affidavit uploaded — AI screening will flag this</div>':''}
+    <div style="font-size:12px;color:var(--text-muted)">
+      <strong>Documents to be uploaded:</strong><br>
+      ${docs.map(d=>`• ${d.type}: ${d.file.name}`).join('<br>')||'None'}
+    </div>`;
+}
+
+async function createDraft(){
+  const fd=new FormData();
+  fd.append('project_name',document.getElementById('proj-name').value.trim());
+  fd.append('sector',document.getElementById('proj-sector').value);
+  fd.append('category',document.getElementById('proj-category').value);
+  fd.append('location',document.getElementById('proj-location').value.trim());
+  fd.append('description',document.getElementById('proj-desc').value.trim());
+  fd.append('capacity',document.getElementById('proj-capacity').value.trim());
+  fd.append('area_ha',document.getElementById('proj-area').value.trim());
+  const res=await apiForm('/application/create',fd);
+  appId=res.application.id;
+  return appId;
+}
+
+async function uploadAllDocs(aid){
+  for(const [key,doc] of Object.entries(uploadedDocs)){
+    const fd=new FormData();
+    fd.append('file',doc.file);
+    fd.append('doc_type',doc.type);
+    fd.append('is_affidavit',doc.isAffidavit?'1':'0');
+    fd.append('affidavit_type',doc.affType||'');
+    await apiForm(`/application/${aid}/upload`,fd);
+  }
+}
+
+async function saveDraft(){
+  if(!validateStep1())return;
+  try{
+    if(!appId) appId = await createDraft();
+    await uploadAllDocs(appId);
+    showToast('Draft saved!','success');
+    setTimeout(()=>location.href=`/case_file?id=${appId}`,1000);
+  }catch(e){document.getElementById('form-alert').innerHTML=`<div class="alert alert-error">⚠️ ${e.message}</div>`;}
+}
+
+init();
+</script>
+</body></html>

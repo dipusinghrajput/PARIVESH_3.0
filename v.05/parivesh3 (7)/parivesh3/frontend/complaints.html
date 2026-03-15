@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Complaints – PARIVESH 3.0</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+.complaint-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:14px;box-shadow:var(--shadow-sm);transition:var(--transition);}
+.complaint-card:hover{box-shadow:var(--shadow);}
+.complaint-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:12px;}
+.complaint-id{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);}
+.complaint-subject{font-weight:700;font-size:14px;color:var(--primary);}
+.complaint-desc{font-size:12.5px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;}
+.complaint-status{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;}
+.complaint-status.Open{background:#FFF3E0;color:#E65100;}
+.complaint-status.Resolved{background:#E8F5E9;color:#2E7D32;}
+.complaint-status.Closed{background:#ECEFF1;color:#546E7A;}
+.response-box{background:#E8F5E9;border-left:4px solid var(--green);border-radius:0 6px 6px 0;padding:12px 14px;margin-top:10px;font-size:12.5px;}
+.response-label{font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--green);margin-bottom:5px;letter-spacing:.4px;}
+</style>
+</head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout"><div id="sidebar-mount"></div>
+<main class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-title">📣 My Complaints</div>
+      <div class="page-subtitle">Submit and track your complaints to the Admin</div>
+    </div>
+    <button class="btn btn-primary" onclick="openModal()">+ New Complaint</button>
+  </div>
+  <div id="page-alert"></div>
+
+  <!-- Complaints list -->
+  <div id="complaints-list">
+    <div style="text-align:center;padding:32px;color:var(--text-muted)">Loading…</div>
+  </div>
+</main></div>
+
+<!-- New Complaint Modal -->
+<div class="modal-overlay" id="complaint-modal"><div class="modal">
+  <div class="modal-header">
+    <span class="modal-title">📣 Submit New Complaint</span>
+    <button class="modal-close" onclick="closeModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <div id="modal-alert"></div>
+    <div class="form-group">
+      <label class="form-label">Subject *</label>
+      <input type="text" id="c-subject" class="form-control" placeholder="Brief title for your complaint" maxlength="200">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Application ID <span class="text-muted">(optional)</span></label>
+      <input type="text" id="c-appid" class="form-control" placeholder="EC-XXXXXXXX">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description * <span class="text-muted text-xs">(min 20 chars)</span></label>
+      <textarea id="c-desc" class="form-control" rows="5"
+        placeholder="Describe your complaint in detail. Include relevant dates, events, and what resolution you expect…"></textarea>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="submitComplaint()">Submit Complaint</button>
+  </div>
+</div></div>
+
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+let currentUser = null;
+
+async function init(){
+  currentUser = await requireAuth(['PP','Admin']);
+  if(!currentUser) return;
+  const {topbarHtml,sidebarHtml,chatbotHtml} = renderShell('complaints', currentUser.role);
+  document.getElementById('topbar-mount').innerHTML = topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML = sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML = chatbotHtml;
+  renderTopbar(currentUser); initGlobalSearch(); initChatbot();
+  loadComplaints();
+}
+
+async function loadComplaints(){
+  const el = document.getElementById('complaints-list');
+  try{
+    const complaints = await apiFetch('/complaint/user');
+    if(!complaints.length){
+      el.innerHTML = `<div class="empty-state">
+        <div class="empty-state-icon">📣</div>
+        <div class="empty-state-text">No complaints submitted yet</div>
+        <div class="empty-state-sub">If you have an issue or concern, click "+ New Complaint"</div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = complaints.map(c => `
+      <div class="complaint-card">
+        <div class="complaint-header">
+          <div>
+            <div class="complaint-id">#${c.id} · ${fmtDate(c.created_at)}</div>
+            <div class="complaint-subject">${c.subject}</div>
+            ${c.application_id ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+              📁 <span class="app-id">${c.application_id}</span>
+              ${c.project_name ? ` — ${c.project_name}` : ''}
+            </div>` : ''}
+          </div>
+          <span class="complaint-status ${c.status}">${c.status}</span>
+        </div>
+        <div class="complaint-desc">${c.description}</div>
+        ${c.admin_response ? `
+          <div class="response-box">
+            <div class="response-label">Admin Response · ${c.responder_name || 'Admin'} · ${fmtDate(c.responded_at)}</div>
+            ${c.admin_response}
+          </div>` : `<div style="font-size:11.5px;color:var(--text-muted)">⏳ Awaiting admin response</div>`}
+      </div>`).join('');
+  }catch(e){
+    el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+}
+
+function openModal(){ document.getElementById('complaint-modal').classList.add('open'); }
+function closeModal(){ document.getElementById('complaint-modal').classList.remove('open'); }
+
+async function submitComplaint(){
+  const subject = document.getElementById('c-subject').value.trim();
+  const desc    = document.getElementById('c-desc').value.trim();
+  const appId   = document.getElementById('c-appid').value.trim();
+  const alertEl = document.getElementById('modal-alert');
+  alertEl.innerHTML = '';
+
+  if(!subject){ alertEl.innerHTML='<div class="alert alert-error">⚠️ Subject is required</div>'; return; }
+  if(!desc || desc.length < 20){
+    alertEl.innerHTML='<div class="alert alert-error">⚠️ Description must be at least 20 characters</div>'; return;
+  }
+
+  try{
+    await apiFetch('/complaint/create', {method:'POST',
+      body: JSON.stringify({subject, description:desc, application_id:appId})});
+    closeModal();
+    showToast('Complaint submitted! Admin has been notified.','success');
+    document.getElementById('c-subject').value='';
+    document.getElementById('c-desc').value='';
+    document.getElementById('c-appid').value='';
+    loadComplaints();
+  }catch(e){
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ ${e.message}</div>`;
+  }
+}
+
+init();
+</script>
+</body></html>

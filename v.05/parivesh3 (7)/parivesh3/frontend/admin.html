@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin – PARIVESH 3.0</title><link rel="stylesheet" href="/static/css/style.css"></head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout"><div id="sidebar-mount"></div>
+<main class="main">
+  <div class="page-header"><div><div class="page-title">⚙️ Administration Panel</div><div class="page-subtitle">Manage users, roles, departments and contact details</div></div></div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">👥 User Management</span>
+      <input id="user-search" class="form-control" style="max-width:220px" placeholder="Search users…" oninput="filterUsers()">
+    </div>
+    <div class="table-wrapper"><table>
+      <thead>
+        <tr>
+          <th>#</th><th>Name</th><th>Email</th><th>Phone</th>
+          <th>Role</th><th>Department</th><th>Joined</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</main></div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="edit-modal"><div class="modal">
+  <div class="modal-header">
+    <span class="modal-title">✏️ Edit User Details</span>
+    <button class="modal-close" onclick="closeModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <div class="form-group">
+      <label class="form-label">Full Name</label>
+      <input type="text" id="edit-name" class="form-control" disabled>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Role *</label>
+        <select id="edit-role" class="form-control">
+          <option value="PP">Project Proponent</option>
+          <option value="Scrutiny">Scrutiny Officer</option>
+          <option value="MoM">MoM Secretariat</option>
+          <option value="Admin">Administrator</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone / Mobile</label>
+        <input type="text" id="edit-phone" class="form-control" placeholder="+91-XXXXX-XXXXX">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Department / Organisation</label>
+      <input type="text" id="edit-dept" class="form-control" placeholder="e.g. Scrutiny Division, MoEFCC">
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+  </div>
+</div></div>
+
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+let currentUser=null, allUsers=[], editingUid=null;
+const ROLE_COLORS={Admin:'var(--primary)',PP:'var(--accent)',Scrutiny:'var(--orange)',MoM:'var(--green)'};
+
+async function init(){
+  currentUser=await requireAuth(['Admin']);
+  if(!currentUser)return;
+  const {topbarHtml,sidebarHtml,chatbotHtml}=renderShell('admin',currentUser.role);
+  document.getElementById('topbar-mount').innerHTML=topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML=sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML=chatbotHtml;
+  renderTopbar(currentUser); initGlobalSearch(); initChatbot();
+  loadUsers();
+}
+
+async function loadUsers(){
+  try{
+    allUsers=await apiFetch('/users');
+    renderUsers(allUsers);
+  }catch(e){showToast(e.message,'error');}
+}
+
+function renderUsers(users){
+  document.getElementById('users-tbody').innerHTML = users.map(u=>`
+    <tr>
+      <td>${u.id}</td>
+      <td><strong>${u.name}</strong></td>
+      <td style="font-family:var(--font-mono);font-size:11.5px">
+        <a href="mailto:${u.email}" style="color:var(--primary-light)">${u.email}</a>
+      </td>
+      <td style="font-family:var(--font-mono);font-size:12px">${u.phone||'<span class="text-muted">–</span>'}</td>
+      <td><span class="badge" style="background:${ROLE_COLORS[u.role]||'#ccc'}22;color:${ROLE_COLORS[u.role]||'#666'}">${u.role}</span></td>
+      <td>${u.department||'<span class="text-muted">–</span>'}</td>
+      <td>${fmtDateShort(u.created_at)}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="editUser(${u.id},'${u.name.replace(/'/g,"\\'")}','${u.role}','${(u.department||'').replace(/'/g,"\\'")}','${(u.phone||'').replace(/'/g,"\\'")}')">
+          ✏️ Edit
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+function filterUsers(){
+  const q=document.getElementById('user-search').value.toLowerCase();
+  renderUsers(allUsers.filter(u=>
+    u.name.toLowerCase().includes(q)||
+    u.email.toLowerCase().includes(q)||
+    u.role.toLowerCase().includes(q)||
+    (u.department||'').toLowerCase().includes(q)||
+    (u.phone||'').includes(q)
+  ));
+}
+
+function editUser(uid, name, role, dept, phone){
+  editingUid=uid;
+  document.getElementById('edit-name').value=name;
+  document.getElementById('edit-role').value=role;
+  document.getElementById('edit-dept').value=dept;
+  document.getElementById('edit-phone').value=phone;
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeModal(){document.getElementById('edit-modal').classList.remove('open');}
+
+async function saveEdit(){
+  try{
+    await apiFetch(`/users/${editingUid}/role`,{method:'PATCH',body:JSON.stringify({
+      role:document.getElementById('edit-role').value,
+      department:document.getElementById('edit-dept').value,
+      phone:document.getElementById('edit-phone').value
+    })});
+    closeModal();
+    showToast('User updated!','success');
+    loadUsers();
+  }catch(e){showToast(e.message,'error');}
+}
+
+init();
+</script>
+</body></html>

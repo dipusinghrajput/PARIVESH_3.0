@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Complaints Dashboard – PARIVESH 3.0</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+.complaint-detail-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow);}
+.complaint-status{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;}
+.complaint-status.Open{background:#FFF3E0;color:#E65100;}
+.complaint-status.Resolved{background:#E8F5E9;color:#2E7D32;}
+.complaint-status.Closed{background:#ECEFF1;color:#546E7A;}
+.response-box{background:#E8F5E9;border-left:4px solid var(--green);border-radius:0 6px 6px 0;padding:12px 14px;margin-top:12px;font-size:13px;}
+.selected-row td{background:#EFF6FF!important;}
+</style>
+</head>
+<body>
+<div id="topbar-mount"></div>
+<div class="layout"><div id="sidebar-mount"></div>
+<main class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-title">📣 Complaints Dashboard</div>
+      <div class="page-subtitle">Review and respond to Project Proponent complaints</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" style="margin-bottom:20px">
+    <div class="stat-card orange"><div class="stat-icon">📬</div><div class="stat-value" id="s-open">–</div><div class="stat-label">Open</div></div>
+    <div class="stat-card green"><div class="stat-icon">✅</div><div class="stat-value" id="s-resolved">–</div><div class="stat-label">Resolved</div></div>
+    <div class="stat-card blue"><div class="stat-icon">📊</div><div class="stat-value" id="s-total">–</div><div class="stat-label">Total</div></div>
+  </div>
+
+  <!-- Filter pills -->
+  <div class="filter-pills" style="margin-bottom:14px">
+    <span class="filter-pill active" onclick="loadComplaints('',this)">All</span>
+    <span class="filter-pill" onclick="loadComplaints('Open',this)">🟠 Open</span>
+    <span class="filter-pill" onclick="loadComplaints('Resolved',this)">✅ Resolved</span>
+    <span class="filter-pill" onclick="loadComplaints('Closed',this)">⬜ Closed</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 380px;gap:18px;align-items:start">
+    <!-- List -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 All Complaints</span>
+        <span id="c-count" class="text-muted text-sm"></span>
+      </div>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>#</th><th>Subject</th><th>User</th><th>App ID</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+        <tbody id="complaints-tbody">
+          <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- Detail panel -->
+    <div>
+      <div class="complaint-detail-panel" id="detail-panel" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div class="card-title" id="d-subject">–</div>
+          <span class="complaint-status" id="d-status-badge">–</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+          <span id="d-meta">–</span>
+        </div>
+        <div style="font-size:13px;line-height:1.7;color:var(--text);background:var(--surface2);padding:12px;border-radius:6px;margin-bottom:14px" id="d-desc">–</div>
+
+        <div id="d-existing-response" style="display:none" class="response-box">
+          <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--green);margin-bottom:4px">Previous Response</div>
+          <div id="d-prev-response">–</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="form-group">
+          <label class="form-label">Your Response *</label>
+          <textarea id="d-response" class="form-control" rows="4" placeholder="Write your response to this complaint…"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Set Status</label>
+            <select id="d-new-status" class="form-control">
+              <option value="Resolved">Resolved</option>
+              <option value="Open">Keep Open</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:14px">
+            <button class="btn btn-primary w-full" onclick="submitResponse()">Send Response</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty-state" id="detail-empty" style="padding:48px 20px">
+        <div class="empty-state-icon">📣</div>
+        <div class="empty-state-text">Select a complaint</div>
+        <div class="empty-state-sub">Click a row on the left to view details and respond</div>
+      </div>
+    </div>
+  </div>
+</main></div>
+
+<div id="chatbot-mount"></div>
+<script src="/static/js/app.js"></script><script src="/static/js/shell.js"></script>
+<script>
+let currentUser = null;
+let selectedId  = null;
+
+async function init(){
+  currentUser = await requireAuth(['Admin']);
+  if(!currentUser) return;
+  const {topbarHtml,sidebarHtml,chatbotHtml} = renderShell('admin_complaints', currentUser.role);
+  document.getElementById('topbar-mount').innerHTML = topbarHtml;
+  document.getElementById('sidebar-mount').innerHTML = sidebarHtml;
+  document.getElementById('chatbot-mount').innerHTML = chatbotHtml;
+  renderTopbar(currentUser); initGlobalSearch(); initChatbot();
+  loadComplaints('', document.querySelector('.filter-pill'));
+}
+
+async function loadComplaints(statusFilter, el){
+  if(el){ document.querySelectorAll('.filter-pill').forEach(p=>p.classList.remove('active')); el.classList.add('active'); }
+  const tbody = document.getElementById('complaints-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted)">Loading…</td></tr>';
+  try{
+    let url = '/complaint/admin';
+    if(statusFilter) url += `?status=${encodeURIComponent(statusFilter)}`;
+    const list = await apiFetch(url);
+    document.getElementById('c-count').textContent = `${list.length} complaint(s)`;
+    document.getElementById('s-total').textContent    = list.length;
+    document.getElementById('s-open').textContent     = list.filter(c=>c.status==='Open').length;
+    document.getElementById('s-resolved').textContent = list.filter(c=>c.status==='Resolved').length;
+
+    if(!list.length){
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">No complaints in this category</div></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(c => `
+      <tr id="row-${c.id}" onclick="selectComplaint(${c.id})" style="cursor:pointer">
+        <td><span class="font-mono text-xs">#${c.id}</span></td>
+        <td><strong>${c.subject}</strong></td>
+        <td>${c.user_name||'–'}</td>
+        <td>${c.application_id ? `<span class="app-id">${c.application_id}</span>` : '–'}</td>
+        <td><span class="complaint-status ${c.status}">${c.status}</span></td>
+        <td>${fmtDateShort(c.created_at)}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();selectComplaint(${c.id})">View</button></td>
+      </tr>`).join('');
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="7"><div class="alert alert-error">${e.message}</div></td></tr>`;
+  }
+}
+
+async function selectComplaint(id){
+  selectedId = id;
+  // Highlight row
+  document.querySelectorAll('tbody tr').forEach(r => r.classList.remove('selected-row'));
+  const row = document.getElementById(`row-${id}`);
+  if(row) row.classList.add('selected-row');
+
+  try{
+    const c = await apiFetch(`/complaint/${id}`);
+    document.getElementById('detail-empty').style.display = 'none';
+    document.getElementById('detail-panel').style.display = 'block';
+
+    document.getElementById('d-subject').textContent = c.subject;
+    const badge = document.getElementById('d-status-badge');
+    badge.textContent = c.status;
+    badge.className = `complaint-status ${c.status}`;
+    document.getElementById('d-meta').innerHTML =
+      `#${c.id} · <strong>${c.user_name||'–'}</strong> (${c.user_email||'–'}) · ${fmtDate(c.created_at)}`
+      + (c.application_id ? ` · App: <span class="app-id">${c.application_id}</span>` : '');
+    document.getElementById('d-desc').textContent = c.description;
+    document.getElementById('d-response').value = '';
+    document.getElementById('d-new-status').value = c.status === 'Open' ? 'Resolved' : c.status;
+
+    const prevBox = document.getElementById('d-existing-response');
+    if(c.admin_response){
+      prevBox.style.display='block';
+      document.getElementById('d-prev-response').textContent = c.admin_response;
+    } else {
+      prevBox.style.display='none';
+    }
+  }catch(e){ showToast(e.message,'error'); }
+}
+
+async function submitResponse(){
+  if(!selectedId){ showToast('Select a complaint first','warning'); return; }
+  const response = document.getElementById('d-response').value.trim();
+  const status   = document.getElementById('d-new-status').value;
+  if(!response){ showToast('Response text is required','warning'); return; }
+  try{
+    await apiFetch('/complaint/respond', {method:'POST',
+      body: JSON.stringify({complaint_id:selectedId, response, status})});
+    showToast('Response sent! Applicant notified.','success');
+    loadComplaints('', null);
+    selectComplaint(selectedId);
+  }catch(e){ showToast(e.message,'error'); }
+}
+
+init();
+</script>
+</body></html>
